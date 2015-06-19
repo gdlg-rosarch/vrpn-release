@@ -1496,5 +1496,3 @@ if(VRPN_INSTALL)
 	cpack_add_component(java DISPLAY_NAME "Java bindings")
 	cpack_add_component(doc DISPLAY_NAME "C++ API Documentation")
 endif()
-
-install(FILES package.xml DESTINATION share/vrpn)
