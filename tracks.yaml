@@ -39,7 +39,7 @@ tracks:
     release_inc: '2'
     release_repo_url: null
     release_tag: :{ask}
-    ros_distro: indigo
+    ros_distro: jade
     vcs_type: git
     vcs_uri: https://github.com/vrpn/vrpn.git
     version: :{ask}
