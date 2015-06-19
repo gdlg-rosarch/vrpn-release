@@ -35,11 +35,11 @@ tracks:
     devel_branch: master
     last_version: 0.7.33
     name: upstream
-    patches: indigo
+    patches: jade
     release_inc: '1'
     release_repo_url: null
     release_tag: :{ask}
-    ros_distro: indigo
+    ros_distro: jade
     vcs_type: git
     vcs_uri: https://github.com/vrpn/vrpn.git
     version: :{ask}
