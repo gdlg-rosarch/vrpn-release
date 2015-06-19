@@ -1,4 +1,4 @@
-From cc98497b7ee2b7a410d92bfe019b99780a4b5c45 Mon Sep 17 00:00:00 2001
+From b8d196f10b1866197d5df3444a5a8f96c554246c Mon Sep 17 00:00:00 2001
 From: Paul Bovbel <pbovbel@clearpathrobotics.com>
 Date: Fri, 19 Jun 2015 15:00:51 -0400
 Subject: [PATCH] Added install rule for package.xml
