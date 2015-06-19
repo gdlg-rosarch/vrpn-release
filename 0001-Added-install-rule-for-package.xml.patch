@@ -1,0 +1,22 @@
+From cdbcd738b1c5ba60691b11411ae37dfc442d6f55 Mon Sep 17 00:00:00 2001
+From: Paul Bovbel <pbovbel@clearpathrobotics.com>
+Date: Fri, 19 Jun 2015 15:42:58 -0400
+Subject: [PATCH] Added install rule for package.xml
+
+---
+ CMakeLists.txt | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index a4a0f2b..6dcdcec 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1496,3 +1496,5 @@ if(VRPN_INSTALL)
+ 	cpack_add_component(java DISPLAY_NAME "Java bindings")
+ 	cpack_add_component(doc DISPLAY_NAME "C++ API Documentation")
+ endif()
++
++install(FILES package.xml DESTINATION share/vrpn)
+-- 
+1.9.1
+
