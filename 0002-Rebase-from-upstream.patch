@@ -1,0 +1,22 @@
+From c8a56f64d7092546f067f5a5c946c267ebd02bd3 Mon Sep 17 00:00:00 2001
+From: Paul Bovbel <pbovbel@clearpathrobotics.com>
+Date: Fri, 19 Jun 2015 15:48:56 -0400
+Subject: [PATCH 2/4] Rebase from 'upstream'
+
+---
+ CMakeLists.txt | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 6dcdcec..a4a0f2b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1496,5 +1496,3 @@ if(VRPN_INSTALL)
+ 	cpack_add_component(java DISPLAY_NAME "Java bindings")
+ 	cpack_add_component(doc DISPLAY_NAME "C++ API Documentation")
+ endif()
+-
+-install(FILES package.xml DESTINATION share/vrpn)
+-- 
+1.9.1
+
