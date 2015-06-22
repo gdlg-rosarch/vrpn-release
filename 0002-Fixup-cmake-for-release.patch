@@ -1,0 +1,76 @@
+From 2bfd9d0712b052406294f4cab34a32185d86b5c5 Mon Sep 17 00:00:00 2001
+From: Paul Bovbel <pbovbel@clearpathrobotics.com>
+Date: Mon, 22 Jun 2015 10:53:16 -0400
+Subject: [PATCH 2/2] Fixup cmake for release
+
+---
+ CMakeLists.txt       |  9 +++++++++
+ cmake/FindVRPN.cmake | 28 ++++++++++++++--------------
+ 2 files changed, 23 insertions(+), 14 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 6dcdcec..8f93974 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -21,6 +21,10 @@ include(CTest)
+ include(CreateDashboardScripts)
+ include(CheckIncludeFileCXX)
+ 
++set(BUILD_TESTING FALSE)
++set(VRPN_BUILD_CLIENTS FALSE)
++set(VRPN_BUILD_SERVERS FALSE)
++
+ if((NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR) OR VRPN_SUBPROJECT_BUILD)
+ 	# If you're using this as a subproject and want things installed, set VRPN_INSTALL TRUE.
+ 	set(SUBPROJECT TRUE)
+@@ -1498,3 +1502,8 @@ if(VRPN_INSTALL)
+ endif()
+ 
+ install(FILES package.xml DESTINATION share/vrpn)
++
++install(
++	FILES cmake/FindVRPN.cmake
++	DESTINATION share/vrpn/cmake
++	RENAME VRPNConfig.cmake)
+diff --git a/cmake/FindVRPN.cmake b/cmake/FindVRPN.cmake
+index 8391b61..a1cf9e9 100644
+--- a/cmake/FindVRPN.cmake
++++ b/cmake/FindVRPN.cmake
+@@ -94,20 +94,20 @@ find_library(VRPN_SERVER_LIBRARY
+ ###
+ # Dependencies
+ ###
+-set(_deps_libs)
+-set(_deps_includes)
+-set(_deps_check)
+-
+-find_package(quatlib)
+-list(APPEND _deps_libs ${QUATLIB_LIBRARIES})
+-list(APPEND _deps_includes ${QUATLIB_INCLUDE_DIRS})
+-list(APPEND _deps_check QUATLIB_FOUND)
+-
+-if(NOT WIN32)
+-	find_package(Threads)
+-	list(APPEND _deps_libs ${CMAKE_THREAD_LIBS_INIT})
+-	list(APPEND _deps_check CMAKE_HAVE_THREADS_LIBRARY)
+-endif()
++# set(_deps_libs)
++# set(_deps_includes)
++# set(_deps_check)
++#
++# find_package(quatlib)
++# list(APPEND _deps_libs ${QUATLIB_LIBRARIES})
++# list(APPEND _deps_includes ${QUATLIB_INCLUDE_DIRS})
++# list(APPEND _deps_check QUATLIB_FOUND)
++#
++# if(NOT WIN32)
++# 	find_package(Threads)
++# 	list(APPEND _deps_libs ${CMAKE_THREAD_LIBS_INIT})
++# 	list(APPEND _deps_check CMAKE_HAVE_THREADS_LIBRARY)
++# endif()
+ 
+ 
+ # handle the QUIETLY and REQUIRED arguments and set xxx_FOUND to TRUE if
+-- 
+1.9.1
+
