@@ -60,7 +60,7 @@ tracks:
     last_version: 0.7.33
     name: upstream
     patches: indigo
-    release_inc: '6'
+    release_inc: '7'
     release_repo_url: null
     release_tag: :{ask}
     ros_distro: kinetic
