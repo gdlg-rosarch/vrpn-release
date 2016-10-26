@@ -1,3 +1,26 @@
+## vrpn (kinetic) - 0.7.33-9
+
+The packages in the `vrpn` repository were released into the `kinetic` distro by running `/usr/bin/bloom-release -r kinetic -t kinetic vrpn` on `Wed, 26 Oct 2016 23:47:48 -0000`
+
+The `vrpn` package was released.
+
+Version of package(s) in repository `vrpn`:
+
+- upstream repository: https://github.com/vrpn/vrpn.git
+- release repository: unknown
+- rosdistro version: `null`
+- old version: `0.7.33-8`
+- new version: `0.7.33-9`
+
+Versions of tools used:
+
+- bloom version: `0.5.23`
+- catkin_pkg version: `0.2.10`
+- rosdep version: `0.11.5`
+- rosdistro version: `0.5.0`
+- vcstools version: `0.1.39`
+
+
 ## vrpn (jade) - 0.7.33-6
 
 The packages in the `vrpn` repository were released into the `jade` distro by running `/usr/bin/bloom-release --rosdistro jade --track jade vrpn` on `Mon, 22 Jun 2015 15:03:21 -0000`
