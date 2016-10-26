@@ -21,10 +21,6 @@ include(CTest)
 include(CreateDashboardScripts)
 include(CheckIncludeFileCXX)
 
-set(BUILD_TESTING FALSE)
-set(VRPN_BUILD_CLIENTS FALSE)
-set(VRPN_BUILD_SERVERS FALSE)
-
 if((NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR) OR VRPN_SUBPROJECT_BUILD)
 	# If you're using this as a subproject and want things installed, set VRPN_INSTALL TRUE.
 	set(SUBPROJECT TRUE)
@@ -1500,10 +1496,3 @@ if(VRPN_INSTALL)
 	cpack_add_component(java DISPLAY_NAME "Java bindings")
 	cpack_add_component(doc DISPLAY_NAME "C++ API Documentation")
 endif()
-
-install(FILES package.xml DESTINATION share/vrpn)
-
-install(
-	FILES cmake/FindVRPN.cmake
-	DESTINATION share/vrpn/cmake
-	RENAME VRPNConfig.cmake)
