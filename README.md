@@ -1,3 +1,26 @@
+## vrpn (lunar) - 0.7.33-0
+
+The packages in the `vrpn` repository were released into the `lunar` distro by running `/usr/local/bin/bloom-release -r lunar -t lunar vrpn` on `Tue, 14 Nov 2017 22:15:28 -0000`
+
+The `vrpn` package was released.
+
+Version of package(s) in repository `vrpn`:
+
+- upstream repository: https://github.com/vrpn/vrpn.git
+- release repository: unknown
+- rosdistro version: `null`
+- old version: `null`
+- new version: `0.7.33-0`
+
+Versions of tools used:
+
+- bloom version: `0.6.1`
+- catkin_pkg version: `0.3.9`
+- rosdep version: `0.11.8`
+- rosdistro version: `0.6.2`
+- vcstools version: `0.1.39`
+
+
 ## vrpn (kinetic) - 0.7.33-9
 
 The packages in the `vrpn` repository were released into the `kinetic` distro by running `/usr/bin/bloom-release -r kinetic -t kinetic vrpn` on `Wed, 26 Oct 2016 23:47:48 -0000`
