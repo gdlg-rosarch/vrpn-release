@@ -1,0 +1,26 @@
+From f9af623754d69c633bd16d9c45a0628997c3f9fd Mon Sep 17 00:00:00 2001
+From: Paul Bovbel <pbovbel@locusrobotics.com>
+Date: Wed, 29 Nov 2017 13:12:02 -0500
+Subject: [PATCH] Added install rules for package.xml
+
+---
+ CMakeLists.txt | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index d79ee4c..f040530 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1369,6 +1369,9 @@ if(VRPN_BUILD_CLIENT_LIBRARY)
+ 			LIBRARY DESTINATION lib${LIB_SUFFIX} COMPONENT clientsdk
+ 			ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT clientsdk
+ 			PUBLIC_HEADER DESTINATION include COMPONENT clientsdk)
++
++		# Install catkin package.xml
++		install(FILES package.xml DESTINATION share/foo)
+ 	endif()
+ 	add_cppcheck(vrpn STYLE UNUSED_FUNCTIONS)
+ endif()
+-- 
+2.14.1
+
