@@ -21,9 +21,6 @@
 #include "vrpn_MessageMacros.h"         // for VRPN_MSG_INFO, VRPN_MSG_WARNING, VRPN_MSG_ERROR
 
 #define MAX_TIME_INTERVAL       (5000000) // max time between reports (usec)
-#define	INCHES_TO_METERS	(2.54/100.0)
-#define PI (3.14159265358979323846)
-
 
 //--------------------------------------------------
 
@@ -53,7 +50,7 @@ vrpn_Tracker_Serial(name,c,port,baud)
     }
     useUTM = utmFlag;
     if (strlen(startSentence) > 0) {
-        nmeaParser.setStartSentence((char*)startSentence);
+        nmeaParser.setStartSentence(startSentence);
     }
 	
   // Set the hardware flow-control on the serial line in case
@@ -124,15 +121,12 @@ int vrpn_Tracker_GPS::get_report(void)
 	//int ret;		// Return value from function call to be checked
 	int ret;
     
-	int i = 0;
     //	unsigned char *bufptr;	// Points into buffer at the current value to read
 	int done=0;
     
 	//char speed[256];
 	//char course[256];
 	//	int buflen = 0;
-	unsigned int numparameter=0;
-	unsigned int index=0;
 	int charRead = 0;
     //	char temp [256];
     

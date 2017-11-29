@@ -11,14 +11,17 @@
 #include "vrpn_Serial.h"
 #include "vrpn_Tracker_Crossbow.h"
 
-// Conversion multiplier from degrees to radians (Pi radians per 180 degrees)
-#define DEGREES_TO_RADIANS (3.1415926535897 / 180)
 // Conversion multiplier from Gs to meters-per-second-per-second (~9.8 m/s^2 on Earth)
 #define MPSS_PER_G (9.80665)
 
 vrpn_Tracker_Crossbow::vrpn_Tracker_Crossbow(const char *name, vrpn_Connection *c, const char *port, long baud, 
-	float g_range, float ar_range) : vrpn_Tracker_Serial(name, c, port, baud), just_read_something(0),
-	lin_accel_range(g_range), ang_accel_range(ar_range), device_version(0), device_serial(0)
+	float g_range, float ar_range)
+  : vrpn_Tracker_Serial(name, c, port, baud)
+  , lin_accel_range(g_range)
+  , ang_accel_range(ar_range)
+  , device_serial(0)
+  , device_version(0)
+  , just_read_something(0)
 {
 }
 
@@ -340,8 +343,8 @@ void vrpn_Tracker_Crossbow::process_packet(const raw_packet &packet) {
 	memset(pos, 0, sizeof(pos));
 	
 	// Calculate the current orientation. (We don't know yaw, so report 0.)
-	double pitch = convert_scalar(packet.pitch_angle, 180.0f) * DEGREES_TO_RADIANS;
-	double roll = convert_scalar(packet.roll_angle, 180.0f) * DEGREES_TO_RADIANS;
+	double pitch = convert_scalar(packet.pitch_angle, 180.0f) * VRPN_DEGREES_TO_RADIANS;
+	double roll = convert_scalar(packet.roll_angle, 180.0f) * VRPN_DEGREES_TO_RADIANS;
 	xb_quat_from_euler(d_quat, pitch, roll);
 
 	// Clear the linear velocity; we don't know it.
@@ -349,7 +352,7 @@ void vrpn_Tracker_Crossbow::process_packet(const raw_packet &packet) {
 
 	// Calculate the current angular velocity from yaw rate
 	// It's in degrees per second, so convert to radians per second.
-	q_from_euler(vel_quat, convert_scalar(packet.yaw_rate, 1.5f * ang_accel_range) * DEGREES_TO_RADIANS, 0, 0);
+	q_from_euler(vel_quat, convert_scalar(packet.yaw_rate, 1.5f * ang_accel_range) * VRPN_DEGREES_TO_RADIANS, 0, 0);
 	vel_quat_dt = 1;
 
 	// Calculate the current acceleration vector

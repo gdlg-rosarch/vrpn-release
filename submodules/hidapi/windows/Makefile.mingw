@@ -6,19 +6,22 @@
 # 2010-06-01
 ###########################################
 
-all: hidtest
+all: hidtest libhidapi.dll
 
 CC=gcc
 CXX=g++
-COBJS=
-CPPOBJS=../hidtest/hidtest.o hid.o
+COBJS=hid.o
+CPPOBJS=../hidtest/hidtest.o
 OBJS=$(COBJS) $(CPPOBJS)
 CFLAGS=-I../hidapi -g -c
 LIBS= -lsetupapi
-
+DLL_LDFLAGS = -mwindows -lsetupapi
 
 hidtest: $(OBJS)
 	g++ -g $^ $(LIBS) -o hidtest
+
+libhidapi.dll: $(OBJS)
+	$(CC) -g $^ $(DLL_LDFLAGS) -o libhidapi.dll
 
 $(COBJS): %.o: %.c
 	$(CC) $(CFLAGS) $< -o $@

@@ -19,8 +19,16 @@
 #include <netinet/in.h> // for htonl, htons
 #endif
 
-#define CHECK(a)                                                               \
+#define CHECK(a) \
     if (a == -1) return -1
+
+#if defined(VRPN_USE_WINSOCK_SOCKETS)
+/* from HP-UX */
+struct timezone {
+	int tz_minuteswest; /* minutes west of Greenwich */
+	int tz_dsttime;     /* type of dst correction */
+};
+#endif
 
 // perform normalization of a timeval
 // XXX this still needs to be checked for errors if the timeval
@@ -154,21 +162,21 @@ timeval vrpn_MsecsTimeval(const double dMsecs)
 // Sleep for dMsecs milliseconds, freeing up the processor while you
 // are doing so.
 
-void vrpn_SleepMsecs(double dMsecs)
+void vrpn_SleepMsecs(double dMilliSecs)
 {
 #if defined(_WIN32)
-    Sleep((DWORD)dMsecs);
+    Sleep((DWORD)dMilliSecs);
 #else
     timeval timeout;
 
     // Convert milliseconds to seconds
-    timeout.tv_sec = (int)(dMsecs / 1000.0);
+    timeout.tv_sec = (int)(dMilliSecs / 1000.0);
 
     // Subtract of whole number of seconds
-    dMsecs -= timeout.tv_sec * 1000;
+    dMilliSecs -= timeout.tv_sec * 1000;
 
     // Convert remaining milliseconds to microsec
-    timeout.tv_usec = (int)(dMsecs * 1000);
+    timeout.tv_usec = (int)(dMilliSecs * 1000);
 
     // A select() with NULL file descriptors acts like a microsecond
     // timer.
@@ -375,6 +383,170 @@ VRPN_API int vrpn_unbuffer(const char **buffer, char *string, vrpn_int32 length)
     return 0;
 }
 
+//=====================================================================
+// This section contains various implementations of vrpn_gettimeofday().
+//   Which one is selected depends on various #defines.  There is a second
+// section that deals with handling various configurations on Windows.
+//   The first section deals with the fact that we may want to use the
+// std::chrono classes introduced in C++-11 as a cross-platform (even
+// Windows) solution to timing.  If VRPN_USE_STD_CHRONO is defined, then
+// we do this -- converting from chrono epoch and interval into the
+// gettimeofday() standard tick of microseconds and epoch start of
+// midnight, January 1, 1970.
+
+///////////////////////////////////////////////////////////////
+// Implementation with std::chrono follows, and overrides any of
+// the Windows-specific definitions if it is present.
+///////////////////////////////////////////////////////////////
+
+#ifdef VRPN_USE_STD_CHRONO
+#include <chrono>
+#include <ctime>
+
+///////////////////////////////////////////////////////////////
+// With Visual Studio 2013 64-bit, the hires clock produces a clock that has a
+// tick interval of around 15.6 MILLIseconds, repeating the same
+// time between them.
+///////////////////////////////////////////////////////////////
+// With Visual Studio 2015 64-bit, the hires clock produces a good, high-
+// resolution clock with no blips.  However, its epoch seems to
+// restart when the machine boots, whereas the system clock epoch
+// starts at the standard midnight January 1, 1970.
+///////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////
+// Helper function to convert from the high-resolution clock
+// time to the equivalent system clock time (assuming no clock
+// adjustment on the system clock since program start).
+//  To make this thread safe, we semaphore the determination of
+// the offset to be applied.  To handle a slow-ticking system
+// clock, we repeatedly sample it until we get a change.
+//  This assumes that the high-resolution clock on different
+// threads has the same epoch.
+///////////////////////////////////////////////////////////////
+
+static bool hr_offset_determined = false;
+static vrpn_Semaphore hr_offset_semaphore;
+static struct timeval hr_offset;
+
+static struct timeval high_resolution_time_to_system_time(
+    struct timeval hi_res_time //< Time computed from high-resolution clock
+    )
+{
+    // If we haven't yet determined the offset between the high-resolution
+    // clock and the system clock, do so now.  Avoid a race between threads
+    // using the semaphore and checking the boolean both before and after
+    // grabbing the semaphore (in case someone beat us to it).
+    if (!hr_offset_determined) {
+        hr_offset_semaphore.p();
+        // Someone else who had the semaphore may have beaten us to this.
+        if (!hr_offset_determined) {
+            // Watch the system clock until it changes; this will put us
+            // at a tick boundary.  On many systems, this will change right
+            // away, but on Windows 8 it will only tick every 16ms or so.
+            std::chrono::system_clock::time_point pre =
+                std::chrono::system_clock::now();
+            std::chrono::system_clock::time_point post;
+            // On Windows 8.1, this took from 1-16 ticks, and seemed to
+            // get offsets to the epoch that were consistent to within
+            // around 1ms.
+            do {
+                post = std::chrono::system_clock::now();
+            } while (pre == post);
+
+            // Now read the high-resolution timer to find out the time
+            // equivalent to the post time on the system clock.
+            std::chrono::high_resolution_clock::time_point high =
+                std::chrono::high_resolution_clock::now();
+
+            // Now convert both the hi-resolution clock time and the
+            // post-tick system clock time into struct timevals and
+            // store the difference between them as the offset.
+            std::time_t high_secs =
+                std::chrono::duration_cast<std::chrono::seconds>(
+                    high.time_since_epoch())
+                    .count();
+            std::chrono::high_resolution_clock::time_point
+                fractional_high_secs = high - std::chrono::seconds(high_secs);
+            struct timeval high_time;
+            high_time.tv_sec = static_cast<unsigned long>(high_secs);
+            high_time.tv_usec = static_cast<unsigned long>(
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    fractional_high_secs.time_since_epoch())
+                    .count());
+
+            std::time_t post_secs =
+                std::chrono::duration_cast<std::chrono::seconds>(
+                    post.time_since_epoch())
+                    .count();
+            std::chrono::system_clock::time_point fractional_post_secs =
+                post - std::chrono::seconds(post_secs);
+            struct timeval post_time;
+            post_time.tv_sec = static_cast<unsigned long>(post_secs);
+            post_time.tv_usec = static_cast<unsigned long>(
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    fractional_post_secs.time_since_epoch())
+                    .count());
+
+            hr_offset = vrpn_TimevalDiff(post_time, high_time);
+
+            // We've found our offset ... re-use it from here on.
+            hr_offset_determined = true;
+        }
+        hr_offset_semaphore.v();
+    }
+
+    // The offset has been determined, by us or someone else.  Apply it.
+    return vrpn_TimevalSum(hi_res_time, hr_offset);
+}
+
+int vrpn_gettimeofday(timeval *tp, void *tzp)
+{
+    // If we have nothing to fill in, don't try.
+    if (tp == NULL) {
+        return 0;
+    }
+	struct timezone *timeZone = reinterpret_cast<struct timezone *>(tzp);
+
+    // Find out the time, and how long it has been in seconds since the
+    // epoch.
+    std::chrono::high_resolution_clock::time_point now =
+        std::chrono::high_resolution_clock::now();
+    std::time_t secs =
+        std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch())
+            .count();
+
+    // Subtract the time in seconds from the full time to get a
+    // remainder that is a fraction of a second since the epoch.
+    std::chrono::high_resolution_clock::time_point fractional_secs =
+        now - std::chrono::seconds(secs);
+
+    // Store the seconds and the fractional seconds as microseconds into
+    // the timeval structure.  Then convert from the hi-res clock time
+    // to system clock time.
+    struct timeval hi_res_time;
+    hi_res_time.tv_sec = static_cast<unsigned long>(secs);
+    hi_res_time.tv_usec = static_cast<unsigned long>(
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            fractional_secs.time_since_epoch())
+            .count());
+    *tp = high_resolution_time_to_system_time(hi_res_time);
+
+    // @todo Fill in timezone structure with relevant info.
+    if (timeZone != NULL) {
+		timeZone->tz_minuteswest = 0;
+		timeZone->tz_dsttime = 0;
+    }
+
+    return 0;
+}
+
+#else // VRPN_USE_STD_CHRONO
+
+///////////////////////////////////////////////////////////////
+// Implementation without std::chrono follows.
+///////////////////////////////////////////////////////////////
+
 ///////////////////////////////////////////////////////////////
 // More accurate gettimeofday() on some Windows operating systems
 // and machines can be gotten by using the Performance Counter
@@ -395,25 +567,26 @@ VRPN_API int vrpn_unbuffer(const char **buffer, char *string, vrpn_int32 length)
 #ifdef _WIN32
 void get_time_using_GetLocalTime(unsigned long &sec, unsigned long &usec)
 {
-    SYSTEMTIME stime;   // System time in funky structure
-    FILETIME ftime;     // Time in 100-nsec intervals since Jan 1 1601
-    LARGE_INTEGER tics; // ftime stored into a 64-bit quantity
+	SYSTEMTIME stime;   // System time in funky structure
+	FILETIME ftime;     // Time in 100-nsec intervals since Jan 1 1601
+	ULARGE_INTEGER tics; // ftime stored into a 64-bit quantity
 
-    GetLocalTime(&stime);
-    SystemTimeToFileTime(&stime, &ftime);
+	GetLocalTime(&stime);
+	SystemTimeToFileTime(&stime, &ftime);
 
-    // Copy the data into a structure that can be treated as a 64-bit integer
-    tics.HighPart = ftime.dwHighDateTime;
-    tics.LowPart = ftime.dwLowDateTime;
+	// Copy the data into a structure that can be treated as a 64-bit integer
+	tics.HighPart = ftime.dwHighDateTime;
+	tics.LowPart = ftime.dwLowDateTime;
 
-    // Convert the 64-bit time into seconds and microseconds since July 1 1601
-    sec = (long)(tics.QuadPart / 10000000L);
-    usec = (long)((tics.QuadPart - (((LONGLONG)(sec)) * 10000000L)) / 10);
+	// Change units (100 nanoseconds --> microseconds)
+	tics.QuadPart /= 10;
+	
+	// Subtract the offset between the two clock bases (Jan 1, 1601 --> Jan 1, 1970)
+	tics.QuadPart -= 11644473600000000ULL;
 
-    // Translate the time to be based on January 1, 1970 (_ftime base)
-    // The offset here is gotten by using the "time_test" program to report the
-    // difference in seconds between the two clocks.
-    sec -= 3054524608;
+	// Convert the 64-bit time into seconds and microseconds since Jan 1 1970
+	sec = (unsigned long)(tics.QuadPart / 1000000UL);
+	usec = (unsigned long)(tics.QuadPart % 1000000UL);
 }
 #endif
 
@@ -425,18 +598,11 @@ void get_time_using_GetLocalTime(unsigned long &sec, unsigned long &usec)
 // version.  It is claimed that they have fixed it now, but
 // better check.
 ///////////////////////////////////////////////////////////////
-int vrpn_gettimeofday(timeval *tp, void *voidp)
+int vrpn_gettimeofday(timeval *tp, void *tzp)
 {
-#ifndef _STRUCT_TIMEZONE
-#define _STRUCT_TIMEZONE
-    /* from HP-UX */
-    struct timezone {
-        int tz_minuteswest; /* minutes west of Greenwich */
-        int tz_dsttime;     /* type of dst correction */
-    };
-#endif
-    struct timezone *tzp = (struct timezone *)voidp;
-    if (tp != NULL) {
+	struct timezone *timeZone = reinterpret_cast<struct timezone *>(tzp);
+
+	if (tp != NULL) {
 #ifdef _WIN32_WCE
         unsigned long sec, usec;
         get_time_using_GetLocalTime(sec, usec);
@@ -452,8 +618,8 @@ int vrpn_gettimeofday(timeval *tp, void *voidp)
     if (tzp != NULL) {
         TIME_ZONE_INFORMATION tz;
         GetTimeZoneInformation(&tz);
-        tzp->tz_minuteswest = tz.Bias;
-        tzp->tz_dsttime = (tz.StandardBias != tz.Bias);
+		timeZone->tz_minuteswest = tz.Bias;
+		timeZone->tz_dsttime = (tz.StandardBias != tz.Bias);
     }
     return 0;
 }
@@ -624,25 +790,16 @@ static int vrpn_AdjustFrequency(void)
 // so until then, we will make it right using our solution.
 ///////////////////////////////////////////////////////////////
 #ifndef VRPN_WINDOWS_CLOCK_V2
-int vrpn_gettimeofday(timeval *tp, void *voidp)
+int vrpn_gettimeofday(timeval *tp, void *tzp)
 {
-    static int fFirst = 1;
+	struct timezone *timeZone = reinterpret_cast<struct timezone *>(tzp);
+	static int fFirst = 1;
     static int fHasPerfCounter = 1;
     static struct _timeb tbInit;
     static LARGE_INTEGER liInit;
     static LARGE_INTEGER liNow;
     static LARGE_INTEGER liDiff;
     timeval tvDiff;
-
-#ifndef _STRUCT_TIMEZONE
-#define _STRUCT_TIMEZONE
-    /* from HP-UX */
-    struct timezone {
-        int tz_minuteswest; /* minutes west of Greenwich */
-        int tz_dsttime;     /* type of dst correction */
-    };
-#endif
-    struct timezone *tzp = (struct timezone *)voidp;
 
     if (!fHasPerfCounter) {
         _ftime(&tbInit);
@@ -729,7 +886,7 @@ int vrpn_gettimeofday(timeval *tp, void *voidp)
 
     return 0;
 }
-#else // defined(VRPN_WINDOWS_CLOCK_V2)
+#else // VRPN_WINDOWS_CLOCK_V2 is defined
 
 void get_time_using_GetLocalTime(unsigned long &sec, unsigned long &usec)
 {
@@ -806,18 +963,9 @@ void get_time_using_GetLocalTime(unsigned long &sec, unsigned long &usec)
     sec -= 3054524608L;
 }
 
-int vrpn_gettimeofday(timeval *tp, void *voidp)
+int vrpn_gettimeofday(timeval *tp, void *tzp)
 {
-#ifndef _STRUCT_TIMEZONE
-#define _STRUCT_TIMEZONE
-    /* from HP-UX */
-    struct timezone {
-        int tz_minuteswest; /* minutes west of Greenwich */
-        int tz_dsttime;     /* type of dst correction */
-    };
-#endif
-    struct timezone *tzp = (struct timezone *)voidp;
-
+	struct timezone *timeZone = reinterpret_cast<struct timezone *>(tzp);
     unsigned long sec, usec;
     get_time_using_GetLocalTime(sec, usec);
     tp->tv_sec = sec;
@@ -825,8 +973,8 @@ int vrpn_gettimeofday(timeval *tp, void *voidp)
     if (tzp != NULL) {
         TIME_ZONE_INFORMATION tz;
         GetTimeZoneInformation(&tz);
-        tzp->tz_minuteswest = tz.Bias;
-        tzp->tz_dsttime = (tz.StandardBias != tz.Bias);
+        timeZone->tz_minuteswest = tz.Bias;
+        timeZone->tz_dsttime = (tz.StandardBias != tz.Bias);
     }
     return 0;
 }
@@ -841,698 +989,144 @@ static int __iTrash = vrpn_gettimeofday(&__tv, (struct timezone *)NULL);
 
 #endif // VRPN_UNSAFE_WINDOWS_CLOCK
 
-#include <stdio.h>  // for fprintf, stderr, perror, etc
-#include <string.h> // for memcpy, strlen, strcpy, etc
-#ifndef _WIN32
-#include <errno.h>  // for EAGAIN, errno
-#include <signal.h> // for pthread_kill, SIGKILL
-#endif
+#endif // VRPN_USE_STD_CHRONO
 
-#define ALL_ASSERT(exp, msg)                                                   \
-    if (!(exp)) {                                                              \
-        fprintf(stderr, "\nAssertion failed! \n %s (%s, %d)\n", msg, __FILE__, \
-                __LINE__);                                                     \
-    }
+// End of the section dealing with vrpn_gettimeofday()
+//=====================================================================
 
-// init all fields in init()
-vrpn_Semaphore::vrpn_Semaphore(int cNumResources)
-    : cResources(cNumResources)
+bool vrpn_test_pack_unpack(void)
 {
-    init();
-}
+    // Get a buffer to use that is large enough to test all of the routines.
+    vrpn_float64 dbuffer[256];
+    vrpn_int32 buflen;
 
-// create a new internal structure for the semaphore
-// (binary copy is not ok)
-// This does not copy the state of the semaphore
-vrpn_Semaphore::vrpn_Semaphore(const vrpn_Semaphore &s)
-    : cResources(s.cResources)
-{
-    init();
-}
+    vrpn_float64 in_float64 = 42.1;
+    vrpn_int32 in_int32 = 17;
+    vrpn_uint16 in_uint16 = 397;
+    vrpn_uint8 in_uint8 = 1;
 
-bool vrpn_Semaphore::init()
-{
-#ifdef sgi
-    if (vrpn_Semaphore::ppaArena == NULL) {
-        vrpn_Semaphore::allocArena();
-    }
-    if (cResources == 1) {
-        fUsingLock = true;
-        ps = NULL;
-        // use lock instead of semaphore
-        if ((l = usnewlock(vrpn_Semaphore::ppaArena)) == NULL) {
-            fprintf(stderr, "vrpn_Semaphore::vrpn_Semaphore: error allocating "
-                            "lock from arena.\n");
-            return false;
-        }
-    }
-    else {
-        fUsingLock = false;
-        l = NULL;
-        if ((ps = usnewsema(vrpn_Semaphore::ppaArena, cResources)) == NULL) {
-            fprintf(stderr, "vrpn_Semaphore::vrpn_Semaphore: error allocating "
-                            "semaphore from arena.\n");
-            return false;
-        }
-    }
-#elif defined(_WIN32)
-    // args are security, initial count, max count, and name
-    // TCH 20 Feb 2001 - Make the PC behavior closer to the SGI behavior.
-    int numMax = cResources;
-    if (numMax < 1) {
-        numMax = 1;
-    }
-    hSemaphore = CreateSemaphore(NULL, cResources, numMax, NULL);
-    if (!hSemaphore) {
-        // get error info from windows (from FormatMessage help page)
-        LPVOID lpMsgBuf;
+    vrpn_float64 out_float64;
+    vrpn_int32 out_int32;
+    vrpn_uint16 out_uint16;
+    vrpn_uint8 out_uint8;
 
-        FormatMessage(
-            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL,
-            GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            // Default language
-            (LPTSTR)&lpMsgBuf, 0, NULL);
+    // Test packing using little-endian routines.
+    // IMPORTANT: Do these from large to small to get good alignment.
+    char *bufptr = (char *)dbuffer;
+    buflen = sizeof(dbuffer);
+    if (vrpn_buffer_to_little_endian(&bufptr, &buflen, in_float64) != 0) {
         fprintf(stderr,
-                "vrpn_Semaphore::vrpn_Semaphore: error creating semaphore, "
-                "WIN32 CreateSemaphore call caused the following error: %s\n",
-                (LPTSTR)lpMsgBuf);
-        // Free the buffer.
-        LocalFree(lpMsgBuf);
+                "vrpn_test_pack_unpack(): Could not buffer little endian\n");
         return false;
     }
-#elif defined(__APPLE__)
-    // We need to use sem_open on the mac because sem_init is not implemented
-    int numMax = cResources;
-    if (numMax < 1) {
-        numMax = 1;
-    }
-    char *tempname = new char[100];
-    sprintf(tempname, "/tmp/vrpn_sem.XXXXXXX");
-    semaphore = sem_open(mktemp(tempname), O_CREAT, 0600, numMax);
-    if (semaphore == SEM_FAILED) {
-        perror("vrpn_Semaphore::vrpn_Semaphore: error opening semaphore");
-        delete[] tempname;
-        return false;
-    }
-    delete[] tempname;
-#else
-    // Posix threads are the default.
-    // We use sem_init on linux (instead of sem_open).
-    int numMax = cResources;
-    if (numMax < 1) {
-        numMax = 1;
-    }
-    semaphore = new sem_t;
-    if (sem_init(semaphore, 0, numMax) != 0) {
-        perror("vrpn_Semaphore::vrpn_Semaphore: error initializing semaphore");
-        return false;
-    }
-#endif
-
-    return true;
-}
-
-bool vrpn_Semaphore::destroy()
-{
-#ifdef sgi
-    if (fUsingLock) {
-        usfreelock(l, vrpn_Semaphore::ppaArena);
-    }
-    else {
-        usfreesema(ps, vrpn_Semaphore::ppaArena);
-    }
-#elif defined(_WIN32)
-    if (!CloseHandle(hSemaphore)) {
-        // get error info from windows (from FormatMessage help page)
-        LPVOID lpMsgBuf;
-
-        FormatMessage(
-            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL,
-            GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            // Default language
-            (LPTSTR)&lpMsgBuf, 0, NULL);
+    if (vrpn_buffer_to_little_endian(&bufptr, &buflen, in_int32) != 0) {
         fprintf(stderr,
-                "vrpn_Semaphore::destroy: error destroying semaphore, "
-                "WIN32 CloseHandle call caused the following error: %s\n",
-                (LPTSTR)lpMsgBuf);
-        // Free the buffer.
-        LocalFree(lpMsgBuf);
+                "vrpn_test_pack_unpack(): Could not buffer little endian\n");
         return false;
     }
-#else
-// Posix threads are the default.
-#ifdef __APPLE__
-    if (sem_close(semaphore) != 0) {
-        perror("vrpn_Semaphore::destroy: error destroying semaphore.");
-        return false;
-    }
-#else
-    if (sem_destroy(semaphore) != 0) {
+    if (vrpn_buffer_to_little_endian(&bufptr, &buflen, in_uint16) != 0) {
         fprintf(stderr,
-                "vrpn_Semaphore::destroy: error destroying semaphore.\n");
+                "vrpn_test_pack_unpack(): Could not buffer little endian\n");
         return false;
     }
-    delete semaphore;
-#endif
-    semaphore = NULL;
-#endif
-    return true;
-}
+    if (vrpn_buffer_to_little_endian(&bufptr, &buflen, in_uint8) != 0) {
+        fprintf(stderr,
+                "vrpn_test_pack_unpack(): Could not buffer little endian\n");
+        return false;
+    }
 
-vrpn_Semaphore::~vrpn_Semaphore()
-{
-    if (!destroy()) {
+    // Test unpacking using little-endian routines.
+    bufptr = (char *)dbuffer;
+    if (in_float64 !=
+        (out_float64 =
+             vrpn_unbuffer_from_little_endian<vrpn_float64>(bufptr))) {
+        fprintf(stderr,
+                "vrpn_test_pack_unpack(): Could not unbuffer little endian\n");
+        return false;
+    }
+    if (in_int32 !=
+        (out_int32 = vrpn_unbuffer_from_little_endian<vrpn_int32>(bufptr))) {
+        fprintf(stderr,
+                "vrpn_test_pack_unpack(): Could not unbuffer little endian\n");
+        return false;
+    }
+    if (in_uint16 !=
+        (out_uint16 = vrpn_unbuffer_from_little_endian<vrpn_uint16>(bufptr))) {
+        fprintf(stderr,
+                "vrpn_test_pack_unpack(): Could not unbuffer little endian\n");
+        return false;
+    }
+    if (in_uint8 !=
+        (out_uint8 = vrpn_unbuffer_from_little_endian<vrpn_uint8>(bufptr))) {
+        fprintf(stderr,
+                "vrpn_test_pack_unpack(): Could not unbuffer little endian\n");
+        return false;
+    }
+
+    // Test packing using big-endian routines.
+    bufptr = (char *)dbuffer;
+    buflen = sizeof(dbuffer);
+    if (vrpn_buffer(&bufptr, &buflen, in_float64) != 0) {
+        fprintf(stderr,
+                "vrpn_test_pack_unpack(): Could not buffer big endian\n");
+        return false;
+    }
+    if (vrpn_buffer(&bufptr, &buflen, in_int32) != 0) {
+        fprintf(stderr,
+                "vrpn_test_pack_unpack(): Could not buffer big endian\n");
+        return false;
+    }
+    if (vrpn_buffer(&bufptr, &buflen, in_uint16) != 0) {
+        fprintf(stderr,
+                "vrpn_test_pack_unpack(): Could not buffer big endian\n");
+        return false;
+    }
+    if (vrpn_buffer(&bufptr, &buflen, in_uint8) != 0) {
+        fprintf(stderr,
+                "vrpn_test_pack_unpack(): Could not buffer big endian\n");
+        return false;
+    }
+
+    // Test unpacking using big-endian routines.
+    bufptr = (char *)dbuffer;
+    if (in_float64 != (out_float64 = vrpn_unbuffer<vrpn_float64>(bufptr))) {
+        fprintf(stderr,
+                "vrpn_test_pack_unpack(): Could not unbuffer big endian\n");
+        return false;
+    }
+    if (in_int32 != (out_int32 = vrpn_unbuffer<vrpn_int32>(bufptr))) {
+        fprintf(stderr,
+                "vrpn_test_pack_unpack(): Could not unbuffer big endian\n");
+        return false;
+    }
+    if (in_uint16 != (out_uint16 = vrpn_unbuffer<vrpn_uint16>(bufptr))) {
+        fprintf(stderr,
+                "vrpn_test_pack_unpack(): Could not unbuffer big endian\n");
+        return false;
+    }
+    if (in_uint8 != (out_uint8 = vrpn_unbuffer<vrpn_uint8>(bufptr))) {
+        fprintf(stderr,
+                "vrpn_test_pack_unpack(): Could not unbuffer big endian\n");
+        return false;
+    }
+
+    // XXX Test pack/unpack of all other types.
+
+    // Test packing little-endian and unpacking big-endian; they should
+    // be different.
+    bufptr = (char *)dbuffer;
+    buflen = sizeof(dbuffer);
+    if (vrpn_buffer_to_little_endian(&bufptr, &buflen, in_float64) != 0) {
+        fprintf(stderr,
+                "vrpn_test_pack_unpack(): Could not buffer little endian\n");
+        return false;
+    }
+    bufptr = (char *)dbuffer;
+    if (in_float64 == (out_float64 = vrpn_unbuffer<vrpn_float64>(bufptr))) {
         fprintf(
             stderr,
-            "vrpn_Semaphore::~vrpn_Semaphore: error destroying semaphore.\n");
-    }
-}
-
-// routine to reset it
-bool vrpn_Semaphore::reset(int cNumResources)
-{
-    cResources = cNumResources;
-
-    // Destroy the old semaphore and then create a new one with the correct
-    // value.
-    if (!destroy()) {
-        fprintf(stderr, "vrpn_Semaphore::reset: error destroying semaphore.\n");
+            "vrpn_test_pack_unpack(): Cross-packing produced same result\n");
         return false;
-    }
-    if (!init()) {
-        fprintf(stderr,
-                "vrpn_Semaphore::reset: error initializing semaphore.\n");
-        return false;
-    }
-    return true;
-}
-
-// routines to use it (p blocks, cond p does not)
-// 1 on success, -1 fail
-int vrpn_Semaphore::p()
-{
-#ifdef sgi
-    if (fUsingLock) {
-        if (ussetlock(l) != 1) {
-            perror("vrpn_Semaphore::p: ussetlock:");
-            return -1;
-        }
-    }
-    else {
-        if (uspsema(ps) != 1) {
-            perror("vrpn_Semaphore::p: uspsema:");
-            return -1;
-        }
-    }
-#elif defined(_WIN32)
-    switch (WaitForSingleObject(hSemaphore, INFINITE)) {
-    case WAIT_OBJECT_0:
-        // got the resource
-        break;
-    case WAIT_TIMEOUT:
-        ALL_ASSERT(0, "vrpn_Semaphore::p: infinite wait time timed out!");
-        return -1;
-        break;
-    case WAIT_ABANDONED:
-        ALL_ASSERT(0, "vrpn_Semaphore::p: thread holding resource died");
-        return -1;
-        break;
-    case WAIT_FAILED:
-        // get error info from windows (from FormatMessage help page)
-        LPVOID lpMsgBuf;
-
-        FormatMessage(
-            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL,
-            GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            // Default language
-            (LPTSTR)&lpMsgBuf, 0, NULL);
-        fprintf(stderr,
-                "vrpn_Semaphore::p: error waiting for resource, "
-                "WIN32 WaitForSingleObject call caused the following error: %s",
-                (LPTSTR)lpMsgBuf);
-        // Free the buffer.
-        LocalFree(lpMsgBuf);
-        return -1;
-        break;
-    default:
-        ALL_ASSERT(0, "vrpn_Semaphore::p: unknown return code");
-        return -1;
-    }
-#else
-    // Posix by default
-    if (sem_wait(semaphore) != 0) {
-        perror("vrpn_Semaphore::p: ");
-        return -1;
-    }
-#endif
-    return 1;
-}
-
-// 0 on success, -1 fail
-int vrpn_Semaphore::v()
-{
-#ifdef sgi
-    if (fUsingLock) {
-        if (usunsetlock(l)) {
-            perror("vrpn_Semaphore::v: usunsetlock:");
-            return -1;
-        }
-    }
-    else {
-        if (usvsema(ps)) {
-            perror("vrpn_Semaphore::v: uspsema:");
-            return -1;
-        }
-    }
-#elif defined(_WIN32)
-    if (!ReleaseSemaphore(hSemaphore, 1, NULL)) {
-        // get error info from windows (from FormatMessage help page)
-        LPVOID lpMsgBuf;
-
-        FormatMessage(
-            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL,
-            GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            // Default language
-            (LPTSTR)&lpMsgBuf, 0, NULL);
-        fprintf(stderr,
-                "vrpn_Semaphore::v: error v'ing semaphore, "
-                "WIN32 ReleaseSemaphore call caused the following error: %s",
-                (LPTSTR)lpMsgBuf);
-        // Free the buffer.
-        LocalFree(lpMsgBuf);
-        return -1;
-    }
-#else
-    // Posix by default
-    if (sem_post(semaphore) != 0) {
-        perror("vrpn_Semaphore::p: ");
-        return -1;
-    }
-#endif
-    return 0;
-}
-
-// 0 if it can't get the resource, 1 if it can
-// -1 if fail
-int vrpn_Semaphore::condP()
-{
-    int iRetVal = 1;
-#ifdef sgi
-    if (fUsingLock) {
-        // don't spin at all
-        iRetVal = uscsetlock(l, 0);
-        if (iRetVal <= 0) {
-            perror("vrpn_Semaphore::condP: uscsetlock:");
-            return -1;
-        }
-    }
-    else {
-        iRetVal = uscpsema(ps);
-        if (iRetVal <= 0) {
-            perror("vrpn_Semaphore::condP: uscpsema:");
-            return -1;
-        }
-    }
-#elif defined(_WIN32)
-    switch (WaitForSingleObject(hSemaphore, 0)) {
-    case WAIT_OBJECT_0:
-        // got the resource
-        break;
-    case WAIT_TIMEOUT:
-        // resource not free
-        iRetVal = 0;
-        break;
-    case WAIT_ABANDONED:
-        ALL_ASSERT(0, "vrpn_Semaphore::condP: thread holding resource died");
-        return -1;
-        break;
-    case WAIT_FAILED:
-        // get error info from windows (from FormatMessage help page)
-        LPVOID lpMsgBuf;
-
-        FormatMessage(
-            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL,
-            GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            // Default language
-            (LPTSTR)&lpMsgBuf, 0, NULL);
-        fprintf(stderr,
-                "Semaphore::condP: error waiting for resource, "
-                "WIN32 WaitForSingleObject call caused the following error: %s",
-                (LPTSTR)lpMsgBuf);
-        // Free the buffer.
-        LocalFree(lpMsgBuf);
-        return -1;
-        break;
-    default:
-        ALL_ASSERT(0, "vrpn_Semaphore::p: unknown return code");
-        return -1;
-    }
-#else
-    // Posix by default
-    iRetVal = sem_trywait(semaphore);
-    if (iRetVal == 0) {
-        iRetVal = 1;
-    }
-    else if (errno == EAGAIN) {
-        iRetVal = 0;
-    }
-    else {
-        perror("vrpn_Semaphore::condP: ");
-        iRetVal = -1;
-    }
-#endif
-    return iRetVal;
-}
-
-int vrpn_Semaphore::numResources() { return cResources; }
-
-// static var definition
-#ifdef sgi
-usptr_t *vrpn_Semaphore::ppaArena = NULL;
-
-#include <sys/stat.h>
-// for umask stuff
-#include <sys/types.h>
-#include <sys/stat.h>
-
-void vrpn_Semaphore::allocArena()
-{
-    // /dev/zero is a special file which can only be shared between
-    // processes/threads which share file descriptors.
-    // It never shows up in the file system.
-    if ((ppaArena = usinit("/dev/zero")) == NULL) {
-        perror("vrpn_Thread::allocArena: usinit:");
-    }
-}
-#endif
-
-vrpn_Thread::vrpn_Thread(void (*pfThreadparm)(vrpn_ThreadData &ThreadData),
-                         vrpn_ThreadData tdparm)
-    : pfThread(pfThreadparm)
-    , td(tdparm)
-    , threadID(0)
-{
-}
-
-bool vrpn_Thread::go()
-{
-    if (threadID != 0) {
-        fprintf(stderr, "vrpn_Thread::go: already running\n");
-        return false;
-    }
-
-#ifdef sgi
-    if ((threadID = sproc(&threadFuncShell, PR_SALL, this)) ==
-        ((unsigned long)-1)) {
-        perror("vrpn_Thread::go: sproc");
-        return false;
-    }
-// Threads not defined for the CYGWIN environment yet...
-#elif defined(_WIN32) && !defined(__CYGWIN__)
-    // pass in func, let it pick stack size, and arg to pass to thread
-    if ((threadID = _beginthread(&threadFuncShell, 0, this)) ==
-        ((unsigned long)-1)) {
-        perror("vrpn_Thread::go: _beginthread");
-        return false;
-    }
-#else
-    // Pthreads by default
-    if (pthread_create(&threadID, NULL, &threadFuncShellPosix, this) != 0) {
-        perror("vrpn_Thread::go:pthread_create: ");
-        return false;
-    }
-#endif
-    return true;
-}
-
-bool vrpn_Thread::kill()
-{
-// kill the os thread
-#if defined(sgi) || defined(_WIN32)
-    if (threadID > 0) {
-#ifdef sgi
-        if (::kill((long)threadID, SIGKILL) < 0) {
-            perror("vrpn_Thread::kill: kill:");
-            return false;
-        }
-#elif defined(_WIN32)
-        // Return value of -1 passed to TerminateThread causes a warning.
-        if (!TerminateThread((HANDLE)threadID, 1)) {
-            fprintf(stderr,
-                    "vrpn_Thread::kill: problem with terminateThread call.\n");
-            return false;
-        }
-#endif
-#else
-    if (threadID) {
-        // Posix by default.  Detach so that the thread's resources will be
-        // freed automatically when it is killed.
-        if (pthread_detach(threadID) != 0) {
-            perror("vrpn_Thread::kill:pthread_detach: ");
-            return false;
-        }
-        if (pthread_kill(threadID, SIGKILL) != 0) {
-            perror("vrpn_Thread::kill:pthread_kill: ");
-            return false;
-        }
-#endif
-    }
-    else {
-        fprintf(stderr, "vrpn_Thread::kill: thread is not currently alive.\n");
-        return false;
-    }
-    threadID = 0;
-    return true;
-}
-
-bool vrpn_Thread::running() { return threadID != 0; }
-
-vrpn_Thread::thread_t vrpn_Thread::pid() { return threadID; }
-
-bool vrpn_Thread::available()
-{
-#ifdef vrpn_THREADS_AVAILABLE
-    return true;
-#else
-    return false;
-#endif
-}
-
-void vrpn_Thread::userData(void *pvNewUserData) { td.pvUD = pvNewUserData; }
-
-void *vrpn_Thread::userData() { return td.pvUD; }
-
-void vrpn_Thread::threadFuncShell(void *pvThread)
-{
-    vrpn_Thread *pth = static_cast<vrpn_Thread *>(pvThread);
-    pth->pfThread(pth->td);
-    // thread has stopped running
-#if !defined(sgi) && !defined(_WIN32)
-    // Pthreads; need to detach the thread so its resources will be freed.
-    if (pthread_detach(pth->threadID) != 0) {
-        perror("vrpn_Thread::threadFuncShell:pthread_detach: ");
-    }
-#endif
-    pth->threadID = 0;
-}
-
-// This is a Posix-compatible function prototype that
-// just calls the other function.
-void *vrpn_Thread::threadFuncShellPosix(void *pvThread)
-{
-    threadFuncShell(pvThread);
-    return NULL;
-}
-
-vrpn_Thread::~vrpn_Thread()
-{
-    if (running()) {
-        kill();
-    }
-}
-
-// For the code to get the number of processor cores.
-#ifdef __APPLE__
-#include <sys/param.h>
-#include <sys/sysctl.h>
-#endif
-
-unsigned vrpn_Thread::number_of_processors()
-{
-#ifdef _WIN32
-    // Copy the hardware information to the SYSTEM_INFO structure.
-    SYSTEM_INFO siSysInfo;
-    GetSystemInfo(&siSysInfo);
-    return siSysInfo.dwNumberOfProcessors;
-#elif linux
-    // For Linux, we look at the /proc/cpuinfo file and count up the number
-    // of "processor	:" entries (tab between processor and colon) in
-    // the file to find out how many we have.
-    FILE *f = fopen("/proc/cpuinfo", "r");
-    int count = 0;
-    if (f == NULL) {
-        perror("vrpn_Thread::number_of_processors:fopen: ");
-        return 1;
-    }
-
-    char line[512];
-    while (fgets(line, sizeof(line), f) != NULL) {
-        if (strncmp(line, "processor\t:", strlen("processor\t:")) == 0) {
-            count++;
-        }
-    }
-
-    fclose(f);
-    if (count == 0) {
-        fprintf(stderr,
-                "vrpn_Thread::number_of_processors: Found zero, returning 1\n");
-        count = 1;
-    }
-    return count;
-
-#elif __APPLE__
-    int count;
-    size_t size = sizeof(count);
-    if (sysctlbyname("hw.ncpu", &count, &size, NULL, 0)) {
-        return 1;
-    }
-    else {
-        return static_cast<unsigned>(count);
-    }
-
-#else
-    fprintf(stderr, "vrpn_Thread::number_of_processors: Not yet implemented on "
-                    "this architecture.\n");
-    return 1;
-#endif
-}
-
-// Thread function to call from within vrpn_test_threads_and_semaphores().
-// In this case, the userdata pointer is a pointer to a semaphore that
-// the thread should call v() on so that it will free up the main program
-// thread.
-static void vrpn_test_thread_body(vrpn_ThreadData &threadData)
-{
-    if (threadData.pvUD == NULL) {
-        fprintf(stderr, "vrpn_test_thread_body(): pvUD is NULL\n");
-        return;
-    }
-    vrpn_Semaphore *s = static_cast<vrpn_Semaphore *>(threadData.pvUD);
-    s->v();
-
-    return;
-}
-
-bool vrpn_test_threads_and_semaphores(void)
-{
-    //------------------------------------------------------------
-    // Make a semaphore to test in single-threaded mode.  First run its count
-    // all the way
-    // down to zero, then bring it back to the full complement and then bring it
-    // down
-    // again.  Check that all of the semaphores are available and also that
-    // there are no
-    // more than expected available.
-    const unsigned sem_count = 5;
-    vrpn_Semaphore s(sem_count);
-    unsigned i;
-    for (i = 0; i < sem_count; i++) {
-        if (s.condP() != 1) {
-            fprintf(stderr, "vrpn_test_threads_and_semaphores(): Semaphore ran "
-                            "out of counts\n");
-            return false;
-        }
-    }
-    if (s.condP() != 0) {
-        fprintf(stderr, "vrpn_test_threads_and_semaphores(): Semaphore had too "
-                        "many counts\n");
-        return false;
-    }
-    for (i = 0; i < sem_count; i++) {
-        if (s.v() != 0) {
-            fprintf(stderr, "vrpn_test_threads_and_semaphores(): Could not "
-                            "release Semaphore\n");
-            return false;
-        }
-    }
-    for (i = 0; i < sem_count; i++) {
-        if (s.condP() != 1) {
-            fprintf(stderr, "vrpn_test_threads_and_semaphores(): Semaphore ran "
-                            "out of counts, round 2\n");
-            return false;
-        }
-    }
-    if (s.condP() != 0) {
-        fprintf(stderr, "vrpn_test_threads_and_semaphores(): Semaphore had too "
-                        "many counts, round 2\n");
-        return false;
-    }
-
-    //------------------------------------------------------------
-    // Get a semaphore and use it to construct a thread data structure and then
-    // a thread.  Use that thread to test whether threading is enabled (if not,
-    // then
-    // this completes our testing) and to find out how many processors there
-    // are.
-    vrpn_ThreadData td;
-    td.pvUD = NULL;
-    vrpn_Thread t(vrpn_test_thread_body, td);
-
-    // If threading is not enabled, then we're done.
-    if (!t.available()) {
-        return true;
-    }
-
-    // Find out how many processors we have.
-    unsigned num_procs = t.number_of_processors();
-    if (num_procs == 0) {
-        fprintf(stderr, "vrpn_test_threads_and_semaphores(): "
-                        "vrpn_Thread::number_of_processors() returned zero\n");
-        return false;
-    }
-
-    //------------------------------------------------------------
-    // Now make sure that we can actually run a thread.  Do this by
-    // creating a semaphore with one entry and calling p() on it.
-    // Then make sure we can't p() it again and then run a thread
-    // that will call v() on it when it runs.
-    vrpn_Semaphore sem;
-    if (sem.p() != 1) {
-        fprintf(stderr, "vrpn_test_threads_and_semaphores(): thread-test "
-                        "Semaphore had no count\n");
-        return false;
-    }
-    if (sem.condP() != 0) {
-        fprintf(stderr, "vrpn_test_threads_and_semaphores(): thread-test "
-                        "Semaphore had too many counts\n");
-        return false;
-    }
-    t.userData(&sem);
-    if (!t.go()) {
-        fprintf(stderr,
-                "vrpn_test_threads_and_semaphores(): Could not start thread\n");
-        return false;
-    }
-    struct timeval start;
-    struct timeval now;
-    vrpn_gettimeofday(&start, NULL);
-    while (true) {
-        if (sem.condP() == 1) {
-            // The thread must have run; we got the semaphore!
-            break;
-        }
-
-        // Time out after three seconds if we haven't had the thread run to
-        // reset the semaphore.
-        vrpn_gettimeofday(&now, NULL);
-        struct timeval diff = vrpn_TimevalDiff(now, start);
-        if (diff.tv_sec >= 3) {
-            fprintf(stderr,
-                    "vrpn_test_threads_and_semaphores(): Thread didn't run\n");
-            return false;
-        }
-
-        vrpn_SleepMsecs(1);
     }
 
     return true;

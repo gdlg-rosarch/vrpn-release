@@ -22,6 +22,7 @@
 
 #include "vrpn_RedundantTransmission.h" // for vrpn_RedundantTransmission
 #include "vrpn_Tracker.h"
+#include "quat.h"
 
 #if defined(VRPN_USE_LIBUSB_1_0)
 #include <libusb.h> // for libusb_close, etc
@@ -711,6 +712,105 @@ void vrpn_Tracker_NULL::setRedundantTransmission(vrpn_RedundantTransmission *t)
     d_redundancy = t;
 }
 
+vrpn_Tracker_Spin::vrpn_Tracker_Spin(const char *name, vrpn_Connection *c,
+  vrpn_int32 sensors, vrpn_float64 Hz,
+  vrpn_float64 axisX, vrpn_float64 axisY,
+  vrpn_float64 axisZ, vrpn_float64 spinRateHz)
+  : vrpn_Tracker(name, c)
+  , update_rate(Hz)
+  , x(axisX)
+  , y(axisY)
+  , z(axisZ)
+  , spin_rate_Hz(spinRateHz)
+{
+  num_sensors = sensors;
+  register_server_handlers();
+
+  // Get the time we started
+  vrpn_gettimeofday(&start, NULL);
+
+  // If the spin rate is set to be negative, then invert the
+  // axis and set it to positive.
+  if (spin_rate_Hz < 0) {
+    spin_rate_Hz *= -1;
+    x *= -1;
+    y *= -1;
+    z *= -1;
+  }
+
+  // Set the pose velocity to match the axis we're spinning
+  // about and our rate of spin.  It will remain the same
+  // throughout the run.  Make the dt such that we spin by
+  // less than half a rotation each delta, so we don't alias
+  // our speed.  Scale rotation by this dt.
+  double dt;
+  if (spin_rate_Hz == 0) {
+    dt = 1.0;
+  } else {
+    dt = 0.9 * (0.5/spin_rate_Hz);
+  }
+  q_from_axis_angle(vel_quat, x, y, z, dt * spin_rate_Hz * 2*Q_PI);
+  vel_quat_dt = dt;
+}
+
+void vrpn_Tracker_Spin::mainloop()
+{
+  struct timeval current_time;
+  char msgbuf[1000];
+  vrpn_int32 i, len;
+
+  // Call the generic server mainloop routine, since this is a server
+  server_mainloop();
+
+  // See if its time to generate a new report
+  vrpn_gettimeofday(&current_time, NULL);
+  if (vrpn_TimevalDurationSeconds(current_time, timestamp) >=
+    1.0 / update_rate) {
+
+    // Update the time
+    timestamp.tv_sec = current_time.tv_sec;
+    timestamp.tv_usec = current_time.tv_usec;
+
+    // Figure out our new pose.
+    double duration = vrpn_TimevalDurationSeconds(current_time, start);
+    q_from_axis_angle(d_quat, x, y, z, duration * spin_rate_Hz * 2*Q_PI);
+
+    // Send messages for all sensors if we have a connection
+    if (d_connection) {
+      for (i = 0; i < num_sensors; i++) {
+        d_sensor = i;
+
+        // Pack position report
+        len = encode_to(msgbuf);
+        if (d_connection->pack_message(len, timestamp, position_m_id,
+          d_sender_id, msgbuf,
+          vrpn_CONNECTION_LOW_LATENCY)) {
+          fprintf(stderr,
+            "NULL tracker: can't write message: tossing\n");
+        }
+
+        // Pack velocity report
+        len = encode_vel_to(msgbuf);
+        if (d_connection->pack_message(len, timestamp, velocity_m_id,
+          d_sender_id, msgbuf,
+          vrpn_CONNECTION_LOW_LATENCY)) {
+          fprintf(stderr,
+            "NULL tracker: can't write message: tossing\n");
+        }
+
+        // Pack acceleration report
+        len = encode_acc_to(msgbuf);
+        if (d_connection->pack_message(len, timestamp, accel_m_id,
+          d_sender_id, msgbuf,
+          vrpn_CONNECTION_LOW_LATENCY)) {
+          fprintf(stderr,
+            "NULL tracker: can't write message: tossing\n");
+        }
+      }
+    }
+  }
+}
+
 vrpn_Tracker_Server::vrpn_Tracker_Server(const char *name, vrpn_Connection *c,
                                          vrpn_int32 sensors)
     : vrpn_Tracker(name, c)
@@ -982,10 +1082,10 @@ vrpn_Tracker_USB::vrpn_Tracker_USB(const char *name, vrpn_Connection *c,
                                    vrpn_uint16 vendor, vrpn_uint16 product,
                                    long baud)
     : vrpn_Tracker(name, c)
+    , _device_handle(NULL)
     , _vendor(vendor)
     , _product(product)
     , _baudrate(baud)
-    , _device_handle(NULL)
 {
     // Register handlers
     register_server_handlers();
@@ -1334,20 +1434,13 @@ int vrpn_Tracker_Remote::request_workspace(void)
 
 int vrpn_Tracker_Remote::set_update_rate(vrpn_float64 samplesPerSecond)
 {
-    char *msgbuf;
-    vrpn_int32 len;
+    char msgbuf[sizeof(vrpn_float64)];
+    char *bufptr = msgbuf;
+    vrpn_int32 len = sizeof(vrpn_float64);
     struct timeval now;
 
-    len = sizeof(vrpn_float64);
-    msgbuf = new char[len];
-    if (!msgbuf) {
-        fprintf(stderr, "vrpn_Tracker_Remote::set_update_rate:  "
-                        "Out of memory!\n");
-        return -1;
-    }
-
-	vrpn_int32 buflen = len;
-	vrpn_buffer(&msgbuf, &buflen, samplesPerSecond);
+    vrpn_int32 buflen = len;
+    vrpn_buffer(&bufptr, &buflen, samplesPerSecond);
 
     vrpn_gettimeofday(&now, NULL);
     timestamp.tv_sec = now.tv_sec;

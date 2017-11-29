@@ -1,4 +1,4 @@
-#include <math.h>                       // for M_PI, pow, fabs
+#include <math.h>                       // for pow, fabs
 
 #include "quat.h"                       // for q_xyz_quat_type, etc
 #include "vrpn_Connection.h"            // for vrpn_Connection, etc
@@ -6,26 +6,22 @@
 
 #undef	VERBOSE
 
-#ifndef	M_PI
-#define M_PI		3.14159265358979323846
-#endif
-
 vrpn_Tracker_AnalogFly::vrpn_Tracker_AnalogFly
          (const char * name, vrpn_Connection * trackercon,
           vrpn_Tracker_AnalogFlyParam * params, float update_rate,
           bool absolute, bool reportChanges,
           bool worldFrame) :
 	vrpn_Tracker (name, trackercon),
+	d_update_interval (update_rate ? (1/update_rate) : 1.0),
+	d_absolute (absolute),
+	d_reportChanges (reportChanges),
+	d_worldFrame (worldFrame),
 	d_reset_button(NULL),
 	d_which_button (params->reset_which),
 	d_clutch_button(NULL),
 	d_clutch_which (params->clutch_which),
 	d_clutch_engaged(false),
-	d_clutch_was_off(false),
-	d_update_interval (update_rate ? (1/update_rate) : 1.0),
-	d_absolute (absolute),
-	d_reportChanges (reportChanges),
-	d_worldFrame (worldFrame)
+	d_clutch_was_off(false)
 {
 	int i;
 
@@ -425,9 +421,9 @@ void	vrpn_Tracker_AnalogFly::update_matrix_based_on_values
   ty = d_y.value * time_interval;
   tz = d_z.value * time_interval;
   
-  rx = d_sx.value * time_interval * (2*M_PI);
-  ry = d_sy.value * time_interval * (2*M_PI);
-  rz = d_sz.value * time_interval * (2*M_PI);
+  rx = d_sx.value * time_interval * (2*VRPN_PI);
+  ry = d_sy.value * time_interval * (2*VRPN_PI);
+  rz = d_sz.value * time_interval * (2*VRPN_PI);
 
   // Build a rotation matrix, then add in the translation
   q_euler_to_col_matrix(diffM, rz, ry, rx);
