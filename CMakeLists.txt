@@ -1377,6 +1377,11 @@ if(VRPN_BUILD_CLIENT_LIBRARY)
 			FILES cmake/FindVRPN.cmake
 			DESTINATION share/vrpn/cmake
 			RENAME VRPNConfig.cmake)
+
+		install(
+			FILES cmake/Findquatlib.cmake
+			DESTINATION share/vrpn/cmake
+			RENAME quatlibConfig.cmake)
 	endif()
 	add_cppcheck(vrpn STYLE UNUSED_FUNCTIONS)
 endif()
