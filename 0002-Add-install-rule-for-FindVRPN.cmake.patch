@@ -1,7 +1,7 @@
-From acd001816fc8352b4b8c8ff85feced53bbe00cb0 Mon Sep 17 00:00:00 2001
+From 47297beed002e5ec2689d128cf1a6c057ca70c73 Mon Sep 17 00:00:00 2001
 From: Paul Bovbel <pbovbel@locusrobotics.com>
 Date: Wed, 29 Nov 2017 20:52:58 -0500
-Subject: [PATCH 2/4] Add install rule for FindVRPN.cmake
+Subject: [PATCH 2/5] Add install rule for FindVRPN.cmake
 
 ---
  CMakeLists.txt | 7 ++++++-

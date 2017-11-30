@@ -1,7 +1,7 @@
-From d8c5a95fa90a0d2387de95489767e8ce0b3b6f24 Mon Sep 17 00:00:00 2001
+From 5ce14fb0a20ebb7423030ca7a2ae26fb9b8f3f92 Mon Sep 17 00:00:00 2001
 From: Paul Bovbel <pbovbel@locusrobotics.com>
 Date: Wed, 29 Nov 2017 22:35:05 -0500
-Subject: [PATCH 4/4] Disable extraneous bits
+Subject: [PATCH 4/5] Disable extraneous bits
 
 ---
  CMakeLists.txt       |  8 ++++----

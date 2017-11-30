@@ -1,0 +1,99 @@
+From 1ae093fbc9a5363c4d7179821e4ca368f39bf18e Mon Sep 17 00:00:00 2001
+From: Paul Bovbel <pbovbel@locusrobotics.com>
+Date: Wed, 29 Nov 2017 23:34:43 -0500
+Subject: [PATCH 5/5] Fix quatlib install
+
+---
+ CMakeLists.txt       | 11 ++++++++++-
+ cmake/FindVRPN.cmake | 44 ++++++++++++++++++++++----------------------
+ 2 files changed, 32 insertions(+), 23 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f4cfb7c..1218030 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -20,9 +20,13 @@ include(OptionRequires)
+ include(CTest)
+ include(CheckIncludeFileCXX)
+ 
+-set(BUILD_TESTING FALSE)
++set(VRPN_BUILD_CLIENT_LIBRARY TRUE)
++set(VRPN_BUILD_JAVA FALSE)
++set(VRPN_BUILD_PYTHON FALSE)
+ set(VRPN_BUILD_CLIENTS FALSE)
+ set(VRPN_BUILD_SERVERS FALSE)
++set(VRPN_BUILD_SERVER_LIBRARY FALSE)
++set(BUILD_TESTING FALSE)
+ 
+ if((NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR) OR VRPN_SUBPROJECT_BUILD)
+ 	# If you're using this as a subproject and want things installed, set VRPN_INSTALL TRUE.
+@@ -1382,6 +1386,11 @@ if(VRPN_BUILD_CLIENT_LIBRARY)
+ 			DESTINATION share/vrpn/cmake
+ 			RENAME VRPNConfig.cmake)
+ 
++		install(
++			FILES cmake/Findquatlib.cmake
++			DESTINATION share/quatlib/cmake
++			RENAME quatlibConfig.cmake)
++
+ 	endif()
+ 	add_cppcheck(vrpn STYLE UNUSED_FUNCTIONS)
+ endif()
+diff --git a/cmake/FindVRPN.cmake b/cmake/FindVRPN.cmake
+index 437b1cc..641b62b 100644
+--- a/cmake/FindVRPN.cmake
++++ b/cmake/FindVRPN.cmake
+@@ -100,28 +100,28 @@ find_library(VRPN_SERVER_LIBRARY
+ ###
+ # Dependencies
+ ###
+-# set(_deps_libs)
+-# set(_deps_includes)
+-# set(_deps_check)
+-#
+-# find_package(quatlib ${_vrpn_quiet})
+-# list(APPEND _deps_libs ${QUATLIB_LIBRARIES})
+-# list(APPEND _deps_includes ${QUATLIB_INCLUDE_DIRS})
+-# list(APPEND _deps_check QUATLIB_FOUND)
+-#
+-# if(NOT WIN32)
+-# 	find_package(Threads ${_vrpn_quiet})
+-# 	list(APPEND _deps_libs ${CMAKE_THREAD_LIBS_INIT})
+-# 	list(APPEND _deps_check CMAKE_HAVE_THREADS_LIBRARY)
+-# endif()
+-#
+-# if(WIN32)
+-# 	find_package(Libusb1 QUIET)
+-# 	if(LIBUSB1_FOUND)
+-# 		list(APPEND _deps_libs ${LIBUSB1_LIBRARIES})
+-# 		list(APPEND _deps_includes ${LIBUSB1_INCLUDE_DIRS})
+-# 	endif()
+-# endif()
++set(_deps_libs)
++set(_deps_includes)
++set(_deps_check)
++
++find_package(quatlib ${_vrpn_quiet})
++list(APPEND _deps_libs ${QUATLIB_LIBRARIES})
++list(APPEND _deps_includes ${QUATLIB_INCLUDE_DIRS})
++list(APPEND _deps_check QUATLIB_FOUND)
++
++if(NOT WIN32)
++	find_package(Threads ${_vrpn_quiet})
++	list(APPEND _deps_libs ${CMAKE_THREAD_LIBS_INIT})
++	list(APPEND _deps_check CMAKE_HAVE_THREADS_LIBRARY)
++endif()
++
++if(WIN32)
++	find_package(Libusb1 QUIET)
++	if(LIBUSB1_FOUND)
++		list(APPEND _deps_libs ${LIBUSB1_LIBRARIES})
++		list(APPEND _deps_includes ${LIBUSB1_INCLUDE_DIRS})
++	endif()
++endif()
+ 
+ 
+ # handle the QUIETLY and REQUIRED arguments and set xxx_FOUND to TRUE if
+-- 
+2.14.1
+
