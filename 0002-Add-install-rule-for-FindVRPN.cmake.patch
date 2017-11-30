@@ -1,0 +1,30 @@
+From 4b4130e5545122b47b3b5133d7cf7f5354af34c8 Mon Sep 17 00:00:00 2001
+From: Paul Bovbel <pbovbel@locusrobotics.com>
+Date: Wed, 29 Nov 2017 20:52:58 -0500
+Subject: [PATCH 2/2] Add install rule for FindVRPN.cmake
+
+---
+ CMakeLists.txt | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f040530..e339075 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1371,7 +1371,12 @@ if(VRPN_BUILD_CLIENT_LIBRARY)
+ 			PUBLIC_HEADER DESTINATION include COMPONENT clientsdk)
+ 
+ 		# Install catkin package.xml
+-		install(FILES package.xml DESTINATION share/foo)
++		install(FILES package.xml DESTINATION share/vrpn)
++
++		install(
++			FILES cmake/FindVRPN.cmake
++			DESTINATION share/vrpn/cmake
++			RENAME VRPNConfig.cmake)
+ 	endif()
+ 	add_cppcheck(vrpn STYLE UNUSED_FUNCTIONS)
+ endif()
+-- 
+2.14.1
+
