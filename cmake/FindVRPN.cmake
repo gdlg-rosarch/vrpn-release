@@ -100,28 +100,28 @@ find_library(VRPN_SERVER_LIBRARY
 ###
 # Dependencies
 ###
-set(_deps_libs)
-set(_deps_includes)
-set(_deps_check)
-
-find_package(quatlib ${_vrpn_quiet})
-list(APPEND _deps_libs ${QUATLIB_LIBRARIES})
-list(APPEND _deps_includes ${QUATLIB_INCLUDE_DIRS})
-list(APPEND _deps_check QUATLIB_FOUND)
-
-if(NOT WIN32)
-	find_package(Threads ${_vrpn_quiet})
-	list(APPEND _deps_libs ${CMAKE_THREAD_LIBS_INIT})
-	list(APPEND _deps_check CMAKE_HAVE_THREADS_LIBRARY)
-endif()
-
-if(WIN32)
-	find_package(Libusb1 QUIET)
-	if(LIBUSB1_FOUND)
-		list(APPEND _deps_libs ${LIBUSB1_LIBRARIES})
-		list(APPEND _deps_includes ${LIBUSB1_INCLUDE_DIRS})
-	endif()
-endif()
+# set(_deps_libs)
+# set(_deps_includes)
+# set(_deps_check)
+#
+# find_package(quatlib ${_vrpn_quiet})
+# list(APPEND _deps_libs ${QUATLIB_LIBRARIES})
+# list(APPEND _deps_includes ${QUATLIB_INCLUDE_DIRS})
+# list(APPEND _deps_check QUATLIB_FOUND)
+#
+# if(NOT WIN32)
+# 	find_package(Threads ${_vrpn_quiet})
+# 	list(APPEND _deps_libs ${CMAKE_THREAD_LIBS_INIT})
+# 	list(APPEND _deps_check CMAKE_HAVE_THREADS_LIBRARY)
+# endif()
+#
+# if(WIN32)
+# 	find_package(Libusb1 QUIET)
+# 	if(LIBUSB1_FOUND)
+# 		list(APPEND _deps_libs ${LIBUSB1_LIBRARIES})
+# 		list(APPEND _deps_includes ${LIBUSB1_INCLUDE_DIRS})
+# 	endif()
+# endif()
 
 
 # handle the QUIETLY and REQUIRED arguments and set xxx_FOUND to TRUE if
