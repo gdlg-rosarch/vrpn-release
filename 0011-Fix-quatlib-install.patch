@@ -1,7 +1,7 @@
-From 1ae093fbc9a5363c4d7179821e4ca368f39bf18e Mon Sep 17 00:00:00 2001
+From 13f9da603703f438365f39c012a5ead4e09a4d47 Mon Sep 17 00:00:00 2001
 From: Paul Bovbel <pbovbel@locusrobotics.com>
 Date: Wed, 29 Nov 2017 23:34:43 -0500
-Subject: [PATCH 05/11] Fix quatlib install
+Subject: [PATCH 11/11] Fix quatlib install
 
 ---
  CMakeLists.txt       | 11 ++++++++++-

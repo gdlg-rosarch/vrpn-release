@@ -1,0 +1,52 @@
+From d698cbff505dd90a38335fbe4509590567877da7 Mon Sep 17 00:00:00 2001
+From: Paul Bovbel <pbovbel@locusrobotics.com>
+Date: Wed, 29 Nov 2017 23:35:49 -0500
+Subject: [PATCH 06/11] Rebase from 'upstream'
+
+---
+ CMakeLists.txt | 22 ----------------------
+ 1 file changed, 22 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 1218030..d79ee4c 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -20,14 +20,6 @@ include(OptionRequires)
+ include(CTest)
+ include(CheckIncludeFileCXX)
+ 
+-set(VRPN_BUILD_CLIENT_LIBRARY TRUE)
+-set(VRPN_BUILD_JAVA FALSE)
+-set(VRPN_BUILD_PYTHON FALSE)
+-set(VRPN_BUILD_CLIENTS FALSE)
+-set(VRPN_BUILD_SERVERS FALSE)
+-set(VRPN_BUILD_SERVER_LIBRARY FALSE)
+-set(BUILD_TESTING FALSE)
+-
+ if((NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR) OR VRPN_SUBPROJECT_BUILD)
+ 	# If you're using this as a subproject and want things installed, set VRPN_INSTALL TRUE.
+ 	set(SUBPROJECT TRUE)
+@@ -1377,20 +1369,6 @@ if(VRPN_BUILD_CLIENT_LIBRARY)
+ 			LIBRARY DESTINATION lib${LIB_SUFFIX} COMPONENT clientsdk
+ 			ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT clientsdk
+ 			PUBLIC_HEADER DESTINATION include COMPONENT clientsdk)
+-
+-		# Install catkin package.xml
+-		install(FILES package.xml DESTINATION share/vrpn)
+-
+-		install(
+-			FILES cmake/FindVRPN.cmake
+-			DESTINATION share/vrpn/cmake
+-			RENAME VRPNConfig.cmake)
+-
+-		install(
+-			FILES cmake/Findquatlib.cmake
+-			DESTINATION share/quatlib/cmake
+-			RENAME quatlibConfig.cmake)
+-
+ 	endif()
+ 	add_cppcheck(vrpn STYLE UNUSED_FUNCTIONS)
+ endif()
+-- 
+2.14.1
+
