@@ -1,0 +1,28 @@
+From 2afb8ebc8992abca2caf95b88ae2ff73e0b3715a Mon Sep 17 00:00:00 2001
+From: Paul Bovbel <pbovbel@locusrobotics.com>
+Date: Wed, 29 Nov 2017 22:25:34 -0500
+Subject: [PATCH 3/3] Add install rule for quatlibConfig.cmake
+
+---
+ CMakeLists.txt | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index e339075..e4a6398 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1377,6 +1377,11 @@ if(VRPN_BUILD_CLIENT_LIBRARY)
+ 			FILES cmake/FindVRPN.cmake
+ 			DESTINATION share/vrpn/cmake
+ 			RENAME VRPNConfig.cmake)
++
++		install(
++			FILES cmake/Findquatlib.cmake
++			DESTINATION share/vrpn/cmake
++			RENAME quatlibConfig.cmake)
+ 	endif()
+ 	add_cppcheck(vrpn STYLE UNUSED_FUNCTIONS)
+ endif()
+-- 
+2.14.1
+
