@@ -20,6 +20,10 @@ include(OptionRequires)
 include(CTest)
 include(CheckIncludeFileCXX)
 
+set(BUILD_TESTING FALSE)
+set(VRPN_BUILD_CLIENTS FALSE)
+set(VRPN_BUILD_SERVERS FALSE)
+
 if((NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR) OR VRPN_SUBPROJECT_BUILD)
 	# If you're using this as a subproject and want things installed, set VRPN_INSTALL TRUE.
 	set(SUBPROJECT TRUE)
@@ -1378,10 +1382,6 @@ if(VRPN_BUILD_CLIENT_LIBRARY)
 			DESTINATION share/vrpn/cmake
 			RENAME VRPNConfig.cmake)
 
-		install(
-			FILES cmake/Findquatlib.cmake
-			DESTINATION share/vrpn/cmake
-			RENAME quatlibConfig.cmake)
 	endif()
 	add_cppcheck(vrpn STYLE UNUSED_FUNCTIONS)
 endif()
