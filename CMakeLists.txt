@@ -20,10 +20,6 @@ include(OptionRequires)
 include(CTest)
 include(CheckIncludeFileCXX)
 
-set(BUILD_TESTING FALSE)
-set(VRPN_BUILD_CLIENTS FALSE)
-set(VRPN_BUILD_SERVERS FALSE)
-
 if((NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR) OR VRPN_SUBPROJECT_BUILD)
 	# If you're using this as a subproject and want things installed, set VRPN_INSTALL TRUE.
 	set(SUBPROJECT TRUE)
@@ -1373,15 +1369,6 @@ if(VRPN_BUILD_CLIENT_LIBRARY)
 			LIBRARY DESTINATION lib${LIB_SUFFIX} COMPONENT clientsdk
 			ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT clientsdk
 			PUBLIC_HEADER DESTINATION include COMPONENT clientsdk)
-
-		# Install catkin package.xml
-		install(FILES package.xml DESTINATION share/vrpn)
-
-		install(
-			FILES cmake/FindVRPN.cmake
-			DESTINATION share/vrpn/cmake
-			RENAME VRPNConfig.cmake)
-
 	endif()
 	add_cppcheck(vrpn STYLE UNUSED_FUNCTIONS)
 endif()
