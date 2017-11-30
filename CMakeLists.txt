@@ -1369,14 +1369,6 @@ if(VRPN_BUILD_CLIENT_LIBRARY)
 			LIBRARY DESTINATION lib${LIB_SUFFIX} COMPONENT clientsdk
 			ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT clientsdk
 			PUBLIC_HEADER DESTINATION include COMPONENT clientsdk)
-
-		# Install catkin package.xml
-		install(FILES package.xml DESTINATION share/vrpn)
-
-		install(
-			FILES cmake/FindVRPN.cmake
-			DESTINATION share/vrpn/cmake
-			RENAME VRPNConfig.cmake)
 	endif()
 	add_cppcheck(vrpn STYLE UNUSED_FUNCTIONS)
 endif()
