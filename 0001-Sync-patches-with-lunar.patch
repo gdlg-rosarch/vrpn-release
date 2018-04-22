@@ -1,4 +1,4 @@
-From c2130d0a630be951ce86b90a72daed60798d3b0d Mon Sep 17 00:00:00 2001
+From 6e5543c447dab43370303ade4c4f91c2a263a5ea Mon Sep 17 00:00:00 2001
 From: Paul Bovbel <pbovbel@locusrobotics.com>
 Date: Wed, 29 Nov 2017 23:53:00 -0500
 Subject: [PATCH] Sync patches with lunar
@@ -63,5 +63,5 @@ index 6dd130b..f13b18e 100644
    <buildtool_depend>cmake</buildtool_depend>
  
 -- 
-2.14.1
+2.17.0
 
