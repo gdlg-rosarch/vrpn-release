@@ -313,6 +313,7 @@ void vrpn_WiiMote::connect_wiimote(int timeout) {
 		vrpn_SleepMsecs(200);
 		initialize_wiimote_state();
 	}
+#ifdef DEBUG
 	else {
 		acquireMessageLock();
 		vrpn_gettimeofday(&now, NULL);
@@ -320,6 +321,7 @@ void vrpn_WiiMote::connect_wiimote(int timeout) {
 		send_text_message(msg, now, vrpn_TEXT_ERROR);
 		releaseMessageLock();
 	}
+#endif
 }
 
 void vrpn_WiiMote::initialize_wiimote_state(void) {

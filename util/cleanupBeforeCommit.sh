@@ -166,6 +166,13 @@ FindFilesNamedCaseInsensitive() {
     #TrimTrailingWhitespace  # Is this safe to do?
     RemoveExecutablePrivilege
 
+    # Server config file
+    StartProcessingFile server_src/vrpn.cfg
+    RemoveDosEndlines
+    #TrimTrailingWhitespace  # Is this safe to do?
+    CheckForUncommentedLines
+    RemoveExecutablePrivilege
+
     # Clean up all CMake files we control
     for fn in $(FindFilesNamed "CMakeLists.txt") *.cmake cmake/*.cmake submodules/*.cmake submodules/CMakeLists.txt; do
         StartProcessingFile ${fn}
@@ -248,11 +255,6 @@ FindFilesNamedCaseInsensitive() {
         RemoveExecutablePrivilege
     done
 
-    # Server config file
-    StartProcessingFile server_src/vrpn.cfg
-    RemoveDosEndlines
-    #TrimTrailingWhitespace  # Is this safe to do?
-    RemoveExecutablePrivilege
-    CheckForUncommentedLines
+
 )
 

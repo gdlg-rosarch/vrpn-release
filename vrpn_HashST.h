@@ -315,13 +315,17 @@ TKey vrpn_Hash<TKey, TValue>::GetCurrentKey() const
 template <class TKey,class TValue>
 bool vrpn_Hash<TKey, TValue>::GetCurrentKeyAndValue(TKey &theKey, TValue &theValue) const
 {
-	if ( m_CurrentItem  ) {
+	bool result;
+		
+	 
+	if ( m_CurrentItem  )
+	{
 		theKey = m_CurrentItem->key;
 		theValue = m_CurrentItem->value;
 		return true;
-	} else {
+	}
+	else
 		return false;
-        }
 }
 
 template <class TKey,class TValue>			//--- these functions do not implement the mutex (this is done in the calling function)

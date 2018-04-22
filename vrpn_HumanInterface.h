@@ -35,7 +35,6 @@
 
 #include "vrpn_Configure.h" // for VRPN_API, VRPN_USE_HID, etc
 #include "vrpn_Types.h"     // for vrpn_uint16, vrpn_uint8
-#include "vrpn_OwningPtr.h"
 
 struct vrpn_HIDDEVINFO {
     vrpn_uint16 vendor;     // USB Vendor ID
@@ -44,7 +43,6 @@ struct vrpn_HIDDEVINFO {
     wchar_t *manufacturer_string;
     wchar_t *product_string;
     int interface_number;
-    const char *path;
 };
 
 // General interface for device enumeration:
@@ -69,47 +67,7 @@ typedef struct hid_device_ hid_device;
 // Main VRPN API for HID devices
 class VRPN_API vrpn_HidInterface {
 public:
-    /// Constructor
-    /// If we already have a HID device from some other source, it can be passed
-    /// and we'll take ownership: still need the acceptor for reconnect, we just
-    /// won't do it right away.
-    vrpn_HidInterface(
-        /// Determines which device we want
-        vrpn_HidAcceptor *acceptor,
-        /// Default vendor is "any"
-        vrpn_uint16 vendor = 0,
-        /// Default product is "any"
-        vrpn_uint16 product = 0,
-        /// Optional underlying HID device to manage and take ownership of
-        hid_device *device = NULL);
-
-    /// Simplified constructor that just takes an acceptor and an underlying HID
-    /// device (both non-optional).
-    ///
-    /// Designed for passing in a device (May look at you funny if you pass a
-    /// NULL device, but will work just as if you had called the other
-    /// constructor with a null device) but handles NULL devices just fine.
-    vrpn_HidInterface(
-        /// Determines which device we want
-        vrpn_HidAcceptor *acceptor,
-        /// Underlying HID device to manage and take ownership of
-        hid_device *device);
-
-    /// Constructor
-    /// If we already know the path to the device we want, we can pass it in and
-    /// open it directly: still need the acceptor for reconnect enumeration, we
-    /// just won't do it right away.
-    vrpn_HidInterface(
-        /// Platform-specific device path, suitable to be passed to HIDAPI's
-        /// hid_open_path
-        const char *device_path,
-        /// Determines which device we want
-        vrpn_HidAcceptor *acceptor,
-        /// Default vendor is "any"
-        vrpn_uint16 vendor = 0,
-        /// Default product is "any"
-        vrpn_uint16 product = 0);
-
+    vrpn_HidInterface(vrpn_HidAcceptor *acceptor);
     virtual ~vrpn_HidInterface();
 
     /// Returns true iff the last device I/O succeeded
@@ -125,18 +83,12 @@ public:
     virtual bool reconnect();
 
     /// Returns USB vendor ID of connected device
-    /// May not contain valid if an already-open device was provided to the
-    /// constructor.
     vrpn_uint16 vendor() const;
 
     /// Returns USB product ID of connected device
-    /// May not contain valid if an already-open device was provided to the
-    /// constructor.
     vrpn_uint16 product() const;
 
     /// Returns the USB interface number of connected device
-    /// May not contain valid information on all platforms or if an already-open
-    /// device was provided to the constructor.
     int interface_number() const;
 
 protected:
@@ -172,34 +124,15 @@ protected:
        any longer!
        Thus, always use "new" to make your acceptors.
     */
-    vrpn_HidAcceptor *m_acceptor;
+    vrpn_HidAcceptor *_acceptor;
 
-    bool m_working;
-    vrpn_uint16 m_vendor;
-    vrpn_uint16 m_product;
-    int m_interface;
-
-    // These are passed in the constructor and kept for use by the
-    // reconnect() method.  Strictly speaking, they are redundant
-    // because you can put an acceptor that only matches the given
-    // vendor and product ID.  However, at least one HID device on at
-    // least one server times out when repeatedly polled for its
-    // info during hid_enumerate() if we don't check for the correct
-    // vendor and product ID and ignore it, so we made this an optional
-    // setting in the constructor.
-    vrpn_uint16 m_vendor_sought;  //!< What vendor we want
-    vrpn_uint16 m_product_sought; //!< What product we want
+    bool _working;
+    vrpn_uint16 _vendor;
+    vrpn_uint16 _product;
+    int _interface;
 
 private:
-    // finishing setup of a device, either passed in or recently opened.
-    bool finish_setup();
-    // Report an error message, which will be augmented with a HIDAPI error
-    // message if one is available and desired
-    void print_error(const char *function, const char *msg,
-                     bool askHIDAPI = true) const;
-    // Performs just the HIDAPI portion of print_error.
-    void print_hidapi_error(const char *function) const;
-    hid_device *m_device; ///< The HID device to use.
+    hid_device *_device; ///< The HID device to use.
 };
 
 #endif // VRPN_USE_HID
@@ -278,7 +211,7 @@ public:
     {
     }
 
-    virtual ~vrpn_HidNthMatchAcceptor() {}
+    virtual ~vrpn_HidNthMatchAcceptor() { delete delegate; }
 
     bool accept(const vrpn_HIDDEVINFO &device)
     {
@@ -292,7 +225,7 @@ public:
 
 private:
     size_t target, found;
-    vrpn::OwningPtr<vrpn_HidAcceptor> delegate;
+    vrpn_HidAcceptor *delegate;
 };
 
 /// Accepts only devices meeting two criteria. NOT SHORT-CIRCUIT.
@@ -304,16 +237,12 @@ public:
         , second(q)
     {
     }
-
-    virtual ~vrpn_HidBooleanAndAcceptor() {}
-
     bool accept(const vrpn_HIDDEVINFO &device)
     {
         bool p = first->accept(device);
         bool q = second->accept(device);
         return p && q;
     }
-
     void reset()
     {
         first->reset();
@@ -321,8 +250,7 @@ public:
     }
 
 private:
-    vrpn::OwningPtr<vrpn_HidAcceptor> first;
-    vrpn::OwningPtr<vrpn_HidAcceptor> second;
+    vrpn_HidAcceptor *first, *second;
 };
 
 /// Accepts devices meeting at least one of two criteria. NOT SHORT-CIRCUIT.
@@ -334,16 +262,12 @@ public:
         , second(q)
     {
     }
-
-    virtual ~vrpn_HidBooleanOrAcceptor() {}
-
     bool accept(const vrpn_HIDDEVINFO &device)
     {
         bool p = first->accept(device);
         bool q = second->accept(device);
         return p || q;
     }
-
     void reset()
     {
         first->reset();
@@ -351,8 +275,7 @@ public:
     }
 
 private:
-    vrpn::OwningPtr<vrpn_HidAcceptor> first;
-    vrpn::OwningPtr<vrpn_HidAcceptor> second;
+    vrpn_HidAcceptor *first, *second;
 };
 
 /// @todo Operators for these acceptors (really predicates) ?

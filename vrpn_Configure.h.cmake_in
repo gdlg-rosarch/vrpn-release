@@ -52,10 +52,6 @@
 #define vrpn_DEFAULT_LISTEN_PORT_NO (3883)
 
 //-----------------------
-// Use the std::chrono library for time, rather than gettimeofday.
-#cmakedefine VRPN_USE_STD_CHRONO
-
-//-----------------------
 // Use compile-time static asserts.
 #cmakedefine VRPN_USE_STATIC_ASSERTIONS
 
@@ -66,12 +62,13 @@
 //-----------------------
 // Instructs VRPN to expose the vrpn_gettimeofday() function also
 // as gettimeofday() so that external programs can use it.  This
-// is put here for Windows.  This function should not really be
-// implemented within VRPN, but it was expedient to include it
-// when porting applications to Windows.  Turn this off if you have
-// another implementation, or if you want to only call
+// has no effect on any system that already has gettimeofday()
+// defined, and is put here for Windows.  This function should
+// not really be implemented within VRPN, but it was expedient to
+// include it when porting applications to Windows.  Turn this
+// off if you have another implementation, or if you want to call
 // vrpn_gettimeofday() directly.
-#cmakedefine VRPN_EXPORT_GETTIMEOFDAY
+#define VRPN_EXPORT_GETTIMEOFDAY
 
 //-----------------------
 // Tells VRPN to compile with support for the Message-Passing
@@ -119,10 +116,6 @@
 // server_src/vrpn_phantom.dsp to reference the Ghost 3.1 include
 // paths.)
 #cmakedefine VRPN_USE_GHOST_31
-
-//------------------------
-// Instructs vrpn to use libi2c-dev.
-#cmakedefine VRPN_USE_I2CDEV
 
 //-----------------------
 // Instructs VRPN to use the high-performance timer code on
@@ -314,7 +307,7 @@
 #cmakedefine VRPN_USE_LIBNIFALCON
 
 //------------------------
-// (OBSOLETE) Instructs VRPN to compile code to use Trivisio's Colibri inertial
+// Instructs VRPN to compile code to use Trivisio's Colibri inertial
 // tracker.  You will also need the SDK, which is available at
 // http://www.trivisio.com/products/motiontracking/colibri#download
 // (tested on Windows).  VRPN_TRIVISIOCOLIBRI_H and
@@ -324,24 +317,6 @@
 // in
 // the path when running the server on Windows
 #cmakedefine VRPN_USE_TRIVISIOCOLIBRI
-
-//------------------------
-// Compiles the VRPN library with the Trivisio Colibri tracker using the
-// ColibriAPI on Linux and Windows.
-//
-// In Linux:
-// The header files (colibri_api.h, etc) and library (colibri-api)
-// should be placed in the /vrpn/trivisio directory.
-// libcolibri-api.so will need to be present in the default library path
-// such as /usr/lib
-//
-// In Windows:
-// The header files (colibri_api.h, etc) should be placed in the
-// in the \vrpn\trivisio directory.
-// colibri-api.lib will need to be located there as well.
-// colibri-api.dll will need to be in the path or with the executable
-// at run time.
-#cmakedefine VRPN_USE_COLIBRIAPI
 
 //------------------------
 // Instructs VRPN to attempt to use HID.  If you don't have libusb installed

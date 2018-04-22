@@ -1,6 +1,6 @@
 //XXX Send velocity and rotational velocity reports.
 
-#include <math.h>                       // for pow, fabs
+#include <math.h>                       // for pow, M_PI, fabs
 
 #include "quat.h"                       // for q_matrix_copy, etc
 #include "vrpn_Connection.h"            // for vrpn_Connection, etc
@@ -8,17 +8,21 @@
 
 #undef	VERBOSE
 
+#ifndef	M_PI
+#define M_PI		3.14159265358979323846
+#endif
+
 vrpn_Tracker_ButtonFly::vrpn_Tracker_ButtonFly
          (const char * name, vrpn_Connection * trackercon,
           vrpn_Tracker_ButtonFlyParam * params, float update_rate,
 	  bool reportChanges) :
 	vrpn_Tracker (name, trackercon),
-	d_update_interval (update_rate ? (1/update_rate) : 1.0),
-        d_reportChanges (reportChanges),
 	d_vel_scale(NULL),
 	d_vel_scale_value(1.0),
 	d_rot_scale(NULL),
-        d_rot_scale_value(1.0)
+	d_rot_scale_value(1.0),
+	d_update_interval (update_rate ? (1/update_rate) : 1.0),
+        d_reportChanges (reportChanges)
 {
   int i;
 
@@ -269,9 +273,9 @@ void vrpn_Tracker_ButtonFly::handle_button_update
       ty = axis->axis.vec[1];
       tz = axis->axis.vec[2];
 
-      rx = axis->axis.rot[0] * (2*VRPN_PI);
-      ry = axis->axis.rot[1] * (2*VRPN_PI);
-      rz = axis->axis.rot[2] * (2*VRPN_PI);
+      rx = axis->axis.rot[0] * (2*M_PI);
+      ry = axis->axis.rot[1] * (2*M_PI);
+      rz = axis->axis.rot[2] * (2*M_PI);
 
       // Build a rotation matrix, then add in the translation
       q_euler_to_col_matrix(newMatrix, rz, ry, rx);
@@ -415,9 +419,9 @@ void	vrpn_Tracker_ButtonFly::update_matrix_based_on_values
       ty += d_axes[i].axis.vec[1] * time_interval * d_vel_scale_value;
       tz += d_axes[i].axis.vec[2] * time_interval * d_vel_scale_value;
   
-      rx = d_axes[i].axis.rot[0] * time_interval * (2*VRPN_PI) * d_rot_scale_value;
-      ry = d_axes[i].axis.rot[1] * time_interval * (2*VRPN_PI) * d_rot_scale_value;
-      rz = d_axes[i].axis.rot[2] * time_interval * (2*VRPN_PI) * d_rot_scale_value;
+      rx = d_axes[i].axis.rot[0] * time_interval * (2*M_PI) * d_rot_scale_value;
+      ry = d_axes[i].axis.rot[1] * time_interval * (2*M_PI) * d_rot_scale_value;
+      rz = d_axes[i].axis.rot[2] * time_interval * (2*M_PI) * d_rot_scale_value;
     }
   }
 

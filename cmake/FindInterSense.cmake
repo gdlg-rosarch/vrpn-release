@@ -38,42 +38,32 @@ if(APPLE)
 	set(_ARCH UniversalLib)
 else()
 	if(CMAKE_SIZEOF_VOID_P MATCHES "8")
-		set(_IS_ARCH x86_64)
+		set(_ARCH x86_64)
 	else()
-		set(_IS_ARCH x86_32)
+		set(_ARCH x86_32)
 	endif()
 endif()
 
-set(_IS_INSTALLDIRS)
 if(APPLE)
-	set(_IS_SDKDIR MacOSX)
+	set(_SDKDIR MacOSX)
 elseif(WIN32)
-	set(_IS_SDKDIR Windows)
-	# Default locations, as well as registry places it records install locations,
-	# if you installed from a (actual or downloaded) product "CD"
-	foreach(_IS_PROD "IS-900 Software" "InertiaCube Software")
-		get_filename_component(_IS_REGPATH "[HKEY_LOCAL_MACHINE\\SOFTWARE\\InterSense\\${_IS_PROD};Path]" ABSOLUTE)
-		if(_IS_REGPATH AND (NOT "${_IS_REGPATH}" STREQUAL "/registry"))
-			list(APPEND _IS_INSTALLDIRS "${_IS_REGPATH}/SDK")
-		endif()
-		list(APPEND _IS_INSTALLDIRS "C:/InterSense/${_IS_PROD}/SDK")
-	endforeach()
+	set(_SDKDIR Windows)
 else() # Assume Linux, since that's the only other platform supported by this library
-	set(_IS_SDKDIR Linux)
+	set(_SDKDIR Linux)
 endif()
 
 find_path(INTERSENSE_INCLUDE_DIR
 	NAMES isense.h
-	PATHS "${INTERSENSE_ROOT_DIR}" "${INTERSENSE_ROOT_DIR}/SDK" ${_IS_INSTALLDIRS})
+	PATHS "${INTERSENSE_ROOT_DIR}" "${INTERSENSE_ROOT_DIR}/SDK")
 
 find_path(INTERSENSE_ISENSEC_DIR
 	NAMES isense.c
-	PATHS "${INTERSENSE_ROOT_DIR}" "${INTERSENSE_ROOT_DIR}/SDK" ${_IS_INSTALLDIRS}
+	PATHS "${INTERSENSE_ROOT_DIR}" "${INTERSENSE_ROOT_DIR}/SDK"
 	PATH_SUFFIXES
-	"Windows/Sample/Visual C++ 2005"
-	"Windows/Sample/Visual C++ 2005 (single tracker)"
 	Linux/Sample
-	MacOSX/Sample)
+	MacOSX/Sample
+	"Windows/Sample/Visual C++ 2005"
+	"Windows/Sample/Visual C++ 2005 (single tracker)")
 
 include(FindPackageHandleStandardArgs)
 
@@ -91,8 +81,8 @@ if(WIN32)
 else() # Only MSVC on Windows theoretically needs import libraries, so...
 	find_library(INTERSENSE_LIBRARY
 		NAMES isense
-		PATHS "${INTERSENSE_ROOT_DIR}" "${INTERSENSE_ROOT_DIR}/SDK" ${_IS_INSTALLDIRS}
-		PATH_SUFFIXES "${_IS_SDKDIR}/${_IS_ARCH}")
+		PATHS "${INTERSENSE_ROOT_DIR}" "${INTERSENSE_ROOT_DIR}/SDK"
+		PATH_SUFFIXES "${_SDKDIR}/${_ARCH}")
 
 	find_package_handle_standard_args(InterSense
 		DEFAULT_MSG

@@ -21,7 +21,7 @@ class VRPN_API vrpn_RedundantTransmission {
 
 public:
     vrpn_RedundantTransmission(vrpn_Connection *c);
-    virtual ~vrpn_RedundantTransmission(void);
+    ~vrpn_RedundantTransmission(void);
 
     // ACCESSORS
 
@@ -158,7 +158,7 @@ class VRPN_API vrpn_RedundantReceiver {
 
 public:
     vrpn_RedundantReceiver(vrpn_Connection *);
-    virtual ~vrpn_RedundantReceiver(void);
+    ~vrpn_RedundantReceiver(void);
 
     virtual int register_handler(vrpn_int32 type, vrpn_MESSAGEHANDLER handler,
                                  void *userdata,

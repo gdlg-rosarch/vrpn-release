@@ -14,7 +14,6 @@ vrpn_Configure
 vrpn_Connection
 vrpn_ConnectionPtr
 vrpn_Dial
-vrpn_EndpointContainer
 vrpn_FileConnection
 vrpn_FileController
 vrpn_ForceDevice
