@@ -6,7 +6,7 @@
 
  8/22/2009
 
- Copyright 2009
+ Copyright 2009, All Rights Reserved.
  
  This contents of this file may be used by anyone
  for any reason without any conditions and may be
@@ -43,9 +43,6 @@ int main(int argc, char* argv[])
 
 	struct hid_device_info *devs, *cur_dev;
 	
-	if (hid_init())
-		return -1;
-
 	devs = hid_enumerate(0x0, 0x0);
 	cur_dev = devs;	
 	while (cur_dev) {
@@ -180,11 +177,6 @@ int main(int argc, char* argv[])
 	for (i = 0; i < res; i++)
 		printf("%02hhx ", buf[i]);
 	printf("\n");
-
-	hid_close(handle);
-
-	/* Free static HIDAPI objects. */
-	hid_exit();
 
 #ifdef WIN32
 	system("pause");

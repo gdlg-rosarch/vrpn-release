@@ -180,7 +180,7 @@ ifeq ($(HW_OS),pc_linux)
 # For Freespace Devices
 #	SYSLIBS := -lfreespace
 # For HID devices
-	SYSLIBS := -lusb-1.0
+#	SYSLIBS := -lusb-1.0
 endif
 ifeq ($(HW_OS),pc_linux64)
 	SYSLIBS := 
@@ -192,7 +192,6 @@ ifeq ($(HW_OS),pc_linux64)
 #	SYSLIBS := -ldl
 # For Freespace Devices
 #	SYSLIBS := -lfreespace
-	SYSLIBS := -lusb-1.0
 endif
 
 ifeq ($(HW_OS),sgi_irix)

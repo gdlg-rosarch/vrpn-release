@@ -324,10 +324,6 @@ SOURCE=.\vrpn_Text.C
 # End Source File
 # Begin Source File
 
-SOURCE=.\vrpn_Streaming_Arduino.C
-# End Source File
-# Begin Source File
-
 SOURCE=.\vrpn_Tng3.C
 # End Source File
 # Begin Source File
@@ -649,10 +645,6 @@ SOURCE=.\vrpn_Spaceball.h
 # Begin Source File
 
 SOURCE=.\vrpn_Text.h
-# End Source File
-# Begin Source File
-
-SOURCE=.\vrpn_Streaming_Arduino.h
 # End Source File
 # Begin Source File
 

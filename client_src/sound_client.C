@@ -54,7 +54,7 @@ void loopSound(vrpn_SoundID id)
   }
 }
 
-int main(int, char**)
+int main(int argc, char** argv)
 {
 	char server[80], device[80], dummy[80];
 	vrpn_SoundID ids[100], id;

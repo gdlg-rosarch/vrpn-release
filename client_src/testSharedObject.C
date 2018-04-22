@@ -7,7 +7,7 @@
 #include "vrpn_Shared.h"                // for timeval
 #include "vrpn_Types.h"                 // for vrpn_bool, vrpn_int32
 
-int VRPN_CALLBACK noteChange (void *userdata, vrpn_int32 newValue, vrpn_bool) {
+int VRPN_CALLBACK noteChange (void * userdata, vrpn_int32 newValue, vrpn_bool isLocal) {
   vrpn_Shared_int32_Remote * ip;
 
   ip = (vrpn_Shared_int32_Remote *) userdata;
@@ -16,7 +16,7 @@ int VRPN_CALLBACK noteChange (void *userdata, vrpn_int32 newValue, vrpn_bool) {
   return 0;
 }
 
-int main (int, char ** argv) {
+int main (int argc, char ** argv) {
 
   vrpn_Connection * c;
   timeval qsec;

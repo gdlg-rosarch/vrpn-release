@@ -6,13 +6,15 @@
 #include "rpc_Test_Remote.h"            // for rpc_Test_Remote
 #include "vrpn_Types.h"                 // for vrpn_int32, vrpn_float32
 
-int main (int, char **) {
+int main (int argc, char ** argv) {
 
   vrpn_Connection * connection;
 
   connection = vrpn_create_server_connection(4999);
 
   int myID = connection->register_sender("rpc_Test");
+
+  rpc_Test_Remote * nmTR = new rpc_Test_Remote(connection);
 
   rpc_Test * enc_out = new rpc_Test(connection);
 

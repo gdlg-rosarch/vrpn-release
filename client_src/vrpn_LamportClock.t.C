@@ -96,7 +96,7 @@ void test_two (void) {
 }
 
 
-int main (int, char **) {
+int main (int argc, char ** argv) {
 
   setUp();
   test_one_getTimestampAndAdvance();
@@ -107,5 +107,6 @@ int main (int, char **) {
   tearDown();
 
   cout << "OK" << endl;
+
 }
 

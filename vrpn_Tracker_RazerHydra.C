@@ -31,7 +31,6 @@ VRPN_SUPPRESS_EMPTY_OBJECT_WARNING()
 // Standard includes
 #include <sstream>                      // for operator<<, basic_ostream, etc
 #include <string>                       // for char_traits, basic_string, etc
-#include <utility>
 #include <stddef.h>                     // for size_t
 #include <stdio.h>                      // for fprintf, NULL, stderr
 #include <string.h>                     // for memset
@@ -80,88 +79,48 @@ static const unsigned long MAXIMUM_INITIAL_WAIT_USEC = 1000000L;
 /// after we tell it to.
 static const unsigned long MAXIMUM_WAIT_USEC = 5000000L;
 
-#ifdef _WIN32
-#define VRPN_HAVE_RELIABLE_INTERFACE_NUMBER
-#endif
-
-static vrpn_HidAcceptor * makeHydraInterfaceAcceptor(unsigned whichInterface) {
-    vrpn::OwningPtr<vrpn_HidAcceptor> productAcceptor(
-        new vrpn_HidProductAcceptor(HYDRA_VENDOR, HYDRA_PRODUCT));
-#ifdef VRPN_HAVE_RELIABLE_INTERFACE_NUMBER
-    vrpn::OwningPtr<vrpn_HidAcceptor> interfaceAcceptor(
-        new vrpn_HidInterfaceNumberAcceptor(whichInterface));
-
-    /// Boolean AND of VID/PID and Interface number
-    vrpn::OwningPtr<vrpn_HidAcceptor> ret(new vrpn_HidBooleanAndAcceptor(
-        interfaceAcceptor.release(), productAcceptor.release()));
-#else
-    // The InterfaceNumber is not supported on the mac and Linux versions -- it
-    // is always returned as -1.  So we need to do this based on which
-    // device shows up first and hope that it is always the same order.
-    // On my mac, the control interface shows up first on iHid, so we
-    // try this order.  If we get it wrong, then we swap things out later.
-
-    /// InterfaceNumberth match of VID/PID
-    vrpn::OwningPtr<vrpn_HidAcceptor> ret(
-        new vrpn_HidNthMatchAcceptor(whichInterface,
-                                     productAcceptor.release()));
-#endif
-    return ret.release();
-}
-
 class vrpn_Tracker_RazerHydra::MyInterface : public vrpn_HidInterface
 {
-        MyInterface(unsigned which_interface, vrpn_Tracker_RazerHydra *hydra,
-                    hid_device *dev = NULL)
-            : vrpn_HidInterface(makeHydraInterfaceAcceptor(which_interface),
-                                HYDRA_VENDOR, HYDRA_PRODUCT, dev)
+    public:
+        MyInterface(unsigned which_interface, vrpn_Tracker_RazerHydra *hydra)
+#ifndef _WIN32
+			// The InterfaceNumber is not supported on the mac and Linux versions -- it
+        // is always returned as -1.  So we need to do this based on which
+        // device shows up first and hope that it is always the same order.
+        // On my mac, the control interface shows up first on iHid, so we
+        // try this order.  If we get it wrong, then we swap things out later.
+            : vrpn_HidInterface(new vrpn_HidNthMatchAcceptor(which_interface,
+#else
+            : vrpn_HidInterface(new vrpn_HidBooleanAndAcceptor(
+                                    new vrpn_HidInterfaceNumberAcceptor(which_interface),
+#endif
+                                new vrpn_HidProductAcceptor(HYDRA_VENDOR, HYDRA_PRODUCT)))
         {
             d_my_interface = which_interface;
             d_hydra = hydra;
-        }
-        MyInterface(unsigned which_interface, vrpn_Tracker_RazerHydra *hydra,
-            const char *path)
-            : vrpn_HidInterface(path, makeHydraInterfaceAcceptor(which_interface),
-                HYDRA_VENDOR, HYDRA_PRODUCT)
-        {
-            d_my_interface = which_interface;
-            d_hydra = hydra;
-        }
-public:
-        /// Factory function: pass in the interface, yourself (the tracker - a ref
-        /// because it shall never be null), and optionally the HID device
-        /// corresponding to that interface, and you'll get
-        /// a brand new MyInterface object back - you take ownership, so an
-        /// OwningPtr is recommended.
-        static MyInterface *make(unsigned which_interface,
-                                 vrpn_Tracker_RazerHydra &hydra,
-                                 hid_device *dev = NULL)
-        {
-            return new MyInterface(which_interface, &hydra, dev);
-        }
-        static MyInterface *make(unsigned which_interface,
-                                 vrpn_Tracker_RazerHydra &hydra,
-                                 const char *path)
-        {
-            return new MyInterface(which_interface, &hydra, path);
         }
 
         void on_data_received(size_t bytes, vrpn_uint8 *buffer)
         {
             if (d_my_interface == HYDRA_CONTROL_INTERFACE)
             {
-#ifdef VRPN_HAVE_RELIABLE_INTERFACE_NUMBER
+#ifndef _WIN32
+				d_hydra->send_text_message(vrpn_TEXT_WARNING)
+                        << "Got report on controller channel.  This means that we need to swap channels. "
+                        << "Swapping channels.";
+
+                MyInterface *t = d_hydra->_ctrl;
+                d_hydra->_ctrl = d_hydra->_data;
+                d_hydra->_data = t;
+                d_hydra->_ctrl->set_interface(HYDRA_CONTROL_INTERFACE);
+                d_hydra->_data->set_interface(HYDRA_INTERFACE);
+#else
                 fprintf(stderr, "Unexpected receipt of %d bytes on Hydra control interface!\n", static_cast<int>(bytes));
                 for (size_t i = 0; i < bytes; ++i)
                 {
                     fprintf(stderr, "%x ", buffer[i]);
                 }
                 fprintf(stderr, "\n");
-#else
-                d_hydra->send_text_message(vrpn_TEXT_WARNING)
-                    << "Got report on controller channel.  This means that we need to swap channels. "
-                    << "Swapping channels.";
-                d_hydra->_swap_channels();
 #endif
             }
             else
@@ -255,74 +214,24 @@ public:
             d_my_interface = which_interface;
         }
 
-        void reset_acceptor()
-        {
-            if (m_acceptor)
-                m_acceptor->reset();
-        }
-
     protected:
         unsigned    d_my_interface;
         vrpn_Tracker_RazerHydra *d_hydra;
 };
 
-vrpn_Tracker_RazerHydra::vrpn_Tracker_RazerHydra(const char *name,
-                                                 vrpn_Connection *con)
+vrpn_Tracker_RazerHydra::vrpn_Tracker_RazerHydra(const char *name, vrpn_Connection *con)
     : vrpn_Analog(name, con)
     , vrpn_Button_Filter(name, con)
     , vrpn_Tracker(name, con)
     , status(HYDRA_WAITING_FOR_CONNECT)
-    /// assume not - if we have to send a command, then set to true
-    , _wasInGamepadMode(false)
+    , _wasInGamepadMode(false) /// assume not - if we have to send a command, then set to true
     , _attempt(0)
     , _docking_distance(0.1f)
 {
     // Set up the control and data channels
-    _ctrl.reset(MyInterface::make(HYDRA_CONTROL_INTERFACE, *this));
-    _data.reset(MyInterface::make(HYDRA_INTERFACE, *this));
-    _shared_init();
-}
+    _ctrl = new MyInterface(HYDRA_CONTROL_INTERFACE, this);
+    _data = new MyInterface(HYDRA_INTERFACE, this);
 
-vrpn_Tracker_RazerHydra::vrpn_Tracker_RazerHydra(const char *name,
-                                                 hid_device *ctrl_dev,
-                                                 hid_device *data_dev,
-                                                 vrpn_Connection *con)
-    : vrpn_Analog(name, con)
-    , vrpn_Button_Filter(name, con)
-    , vrpn_Tracker(name, con)
-    , status(HYDRA_WAITING_FOR_CONNECT)
-    /// assume not - if we have to send a command, then set to true
-    , _wasInGamepadMode(false)
-    , _attempt(0)
-    , _docking_distance(0.1f)
-{
-    // Set up the control and data channels. Convienently, the factory function
-    // handles the null device cases fine.
-    _ctrl.reset(MyInterface::make(HYDRA_CONTROL_INTERFACE, *this, ctrl_dev));
-    _data.reset(MyInterface::make(HYDRA_INTERFACE, *this, data_dev));
-    _shared_init();
-}
-vrpn_Tracker_RazerHydra::vrpn_Tracker_RazerHydra(const char *name,
-                                                 const char *ctrl_dev_path,
-                                                 const char *data_dev_path,
-                                                 vrpn_Connection *con)
-    : vrpn_Analog(name, con)
-    , vrpn_Button_Filter(name, con)
-    , vrpn_Tracker(name, con)
-    , status(HYDRA_WAITING_FOR_CONNECT)
-    /// assume not - if we have to send a command, then set to true
-    , _wasInGamepadMode(false)
-    , _attempt(0)
-    , _docking_distance(0.1f)
-{
-    // Set up the control and data channels.
-    _ctrl.reset(
-        MyInterface::make(HYDRA_CONTROL_INTERFACE, *this, ctrl_dev_path));
-    _data.reset(MyInterface::make(HYDRA_INTERFACE, *this, data_dev_path));
-    _shared_init();
-}
-
-void vrpn_Tracker_RazerHydra::_shared_init() {
     /// Set up sensor counts
     vrpn_Analog::num_channel = ANALOG_CHANNELS; /// 3 analog channels from each controller
     vrpn_Button::num_buttons = BUTTON_CHANNELS; /// 7 for each controller, starting at a nice number for each
@@ -359,6 +268,8 @@ vrpn_Tracker_RazerHydra::~vrpn_Tracker_RazerHydra()
         send_text_message() << "Waiting 2 seconds for mode change to complete.";
         vrpn_SleepMsecs(2000);
     }
+
+    delete _ctrl;
 }
 
 void vrpn_Tracker_RazerHydra::mainloop()
@@ -367,33 +278,31 @@ void vrpn_Tracker_RazerHydra::mainloop()
     // base devices because it is in the unique base class.
     server_mainloop();
 
-    if (!_data->connected()) {
-        reconnect();
-        return;
-    }
-
-    // HID device update
-    _data->update();
-    _ctrl->update();
-
-    // Check/update listening state during connection/handshaking
-    switch(status)
+    if (_data->connected())
     {
-    case HYDRA_WAITING_FOR_CONNECT:
-        _waiting_for_connect();
-        break;
+        // HID device update
+        _data->update();
+        _ctrl->update();
 
-    case HYDRA_LISTENING_AFTER_CONNECT:
-        _listening_after_connect();
-        break;
+        // Check/update listening state during connection/handshaking
+        switch(status)
+        {
+            case HYDRA_WAITING_FOR_CONNECT:
+                _waiting_for_connect();
+                break;
 
-    case HYDRA_LISTENING_AFTER_SET_FEATURE:
-        _listening_after_set_feature();
-        break;
+            case HYDRA_LISTENING_AFTER_CONNECT:
+                _listening_after_connect();
+                break;
 
-    case HYDRA_REPORTING:
-    default:
-        break;
+            case HYDRA_LISTENING_AFTER_SET_FEATURE:
+                _listening_after_set_feature();
+                break;
+
+            case HYDRA_REPORTING:
+            default:
+                break;
+        }
     }
 }
 
@@ -408,18 +317,8 @@ bool vrpn_Tracker_RazerHydra::reconnect()
         _mirror[i] = 1;
     }
 
-    _data->reset_acceptor();
     _data->reconnect();
-    _ctrl->reset_acceptor();
     return _ctrl->reconnect();
-}
-
-/// Swap the control and data interfaces/channels: needed on some systems, we
-/// can detect if they're mixed up.
-void vrpn_Tracker_RazerHydra::_swap_channels() {
-    swap(_ctrl, _data);
-    _ctrl->set_interface(HYDRA_CONTROL_INTERFACE);
-    _data->set_interface(HYDRA_INTERFACE);
 }
 
 void vrpn_Tracker_RazerHydra::_waiting_for_connect()
@@ -485,13 +384,16 @@ void vrpn_Tracker_RazerHydra::_listening_after_set_feature()
                 << _attempt << " attempt" << (_attempt > 1 ? ". " : "s. ")
                 << " Will give it another try. "
                 << "If this doesn't work, unplug and replug device and restart the VRPN server.";
-#ifndef VRPN_HAVE_RELIABLE_INTERFACE_NUMBER
+#ifndef _WIN32
 		if ((_attempt % 2) == 0)
         {
             send_text_message(vrpn_TEXT_WARNING)
-                << "Switching control and data interface (some systems can't "
-                   "tell the difference) and trying again to wake it.";
-            _swap_channels();
+                    << "Switching control and data interface (mac can't tell the difference).";
+            MyInterface *t = _ctrl;
+            _ctrl = _data;
+            _data = t;
+            _ctrl->set_interface(HYDRA_CONTROL_INTERFACE);
+            _data->set_interface(HYDRA_INTERFACE);
         }
 #endif
         _enter_motion_controller_mode();
@@ -535,9 +437,10 @@ void vrpn_Tracker_RazerHydra::_enter_motion_controller_mode()
     vrpn_gettimeofday(&_set_feature, NULL);
 }
 
-void vrpn_Tracker_RazerHydra::_report_for_sensor(int sensorNum, vrpn_uint8 * data, double /*dt*/)
+void vrpn_Tracker_RazerHydra::_report_for_sensor(int sensorNum, vrpn_uint8 * data, double dt)
 {
-    if (!d_connection) {
+    if (!d_connection)
+    {
         return;
     }
     static const double MM_PER_METER = 0.001;
@@ -570,7 +473,8 @@ void vrpn_Tracker_RazerHydra::_report_for_sensor(int sensorNum, vrpn_uint8 * dat
 
     // autocalibrate if docked
     _docked[sensorNum] = q_vec_magnitude(pos) < _docking_distance;
-    if(_docked[sensorNum]) {
+    if(_docked[sensorNum])
+    {
         _calibration_done[sensorNum] = true;
 
         // store the base quaternion to fix up any bizarre rotations - ensures that we start x-right, y-front, z-up
@@ -580,11 +484,10 @@ void vrpn_Tracker_RazerHydra::_report_for_sensor(int sensorNum, vrpn_uint8 * dat
         // initialize hemisphere tracking
         // coordinate sanity check - sensor 0 (left): -x, -y, -z
         //                           sensor 1 (right) +x, -y, -z
-        if(pos[1] > 0 || pos[2] > 0) {
+        if(pos[1] > 0 || pos[2] > 0)
             _mirror[sensorNum] = -1; // wrong hemisphere, switch
-        } else {
+        else
             _mirror[sensorNum] = 1;
-        }
 
         q_vec_type tmp;
         q_vec_copy(tmp, pos);
@@ -602,7 +505,8 @@ void vrpn_Tracker_RazerHydra::_report_for_sensor(int sensorNum, vrpn_uint8 * dat
         q_vec_copy(_old_position[sensorNum], tmp);
     }
 
-    if (_calibration_done[sensorNum]) {
+    if (_calibration_done[sensorNum])
+    {
         // apply orientation calibration, undoing the original
         // rotation and then doing the current rotation using the
         // calibration data.
@@ -614,7 +518,8 @@ void vrpn_Tracker_RazerHydra::_report_for_sensor(int sensorNum, vrpn_uint8 * dat
         // apply current hemisphere fix
         q_vec_scale(pos, _mirror[sensorNum], pos);
 
-        if(!_docked[sensorNum]) {
+        if(!_docked[sensorNum])
+        {
             // check for hemisphere transition
             q_vec_type v_direct, v_mirror, pos_inv;
             q_vec_subtract(v_direct, pos, _old_position[sensorNum]);
@@ -627,7 +532,8 @@ void vrpn_Tracker_RazerHydra::_report_for_sensor(int sensorNum, vrpn_uint8 * dat
 
             // too big jump, likely hemisphere switch
             // in that case the coordinates given are mirrored symmetrically across the base
-            if (dist_direct > dist_mirror) {
+            if (dist_direct > dist_mirror)
+            {
                 /*
                 fprintf(stdout, "%d Switched hemisphere! %3.2f %3.2f\n", sensorNum, dist_direct, dist_mirror);
                 fprintf(stdout, "\tOld: %3.2f, %3.2f, %3.2f    Current: %3.2f, %3.2f, %3.2f\n",
@@ -664,6 +570,7 @@ void vrpn_Tracker_RazerHydra::_report_for_sensor(int sensorNum, vrpn_uint8 * dat
 
     /// Joystick button
     buttons[6 + buttonOffset] = (buttonBits & 0x40) != 0;
+
 
     /*********************
      * Decode analog axes

@@ -18,6 +18,7 @@ include(CppcheckTargets)
 include(SetDefaultBuildType)
 include(OptionRequires)
 include(CTest)
+include(CreateDashboardScripts)
 include(CheckIncludeFileCXX)
 
 if((NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR) OR VRPN_SUBPROJECT_BUILD)
@@ -25,15 +26,18 @@ if((NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR) OR VRPN_SUBPROJECT_B
 	set(SUBPROJECT TRUE)
 	set(DEFAULT_OFF_IF_SUBPROJECT OFF_BY_DEFAULT)
 	set(TRUE_UNLESS_SUBPROJECT FALSE)
-	set(QUIET_IF_SUBPROJECT QUIET) # silently search for optional deps as a subproject
-	set(BUILD_TESTING FALSE) # don't build testing or create dashboard scripts if a subproject
 else()
 	set(VRPN_INSTALL TRUE)
 	set(SUBPROJECT FALSE)
 	set(DEFAULT_OFF_IF_SUBPROJECT)
 	set(TRUE_UNLESS_SUBPROJECT TRUE)
-	set(QUIET_IF_SUBPROJECT)
-	include(CreateDashboardScripts)
+endif()
+
+# TODO Remove the following when it is fixed in the Android CMake.
+if(BUILD_WITH_ANDROID_NDK)
+	set(CMAKE_CXX_FLAGS
+		"--sysroot=${ANDROID_NDK_SYSROOT} ${CMAKE_CXX_FLAGS}")
+	set(CMAKE_C_FLAGS "--sysroot=${ANDROID_NDK_SYSROOT} ${CMAKE_C_FLAGS}")
 endif()
 
 ###
@@ -85,12 +89,12 @@ message(STATUS
 	"Configuring the VRPN suite version ${CPACK_PACKAGE_VERSION} using the CMake-based build system\n")
 
 set(CPACK_PACKAGE_VENDOR
-	"VRPN Community led by Sensics, Inc.")
+	"Russell M. Taylor II at the University of North Carolina at Chapel Hill")
 set(CPACK_PACKAGE_FILE_NAME
 	"${PROJECT_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
 set(CPACK_SOURCE_PACKAGE_FILE_NAME
 	"${PROJECT_NAME}-${CPACK_PACKAGE_VERSION}-src")
-set(CPACK_PACKAGE_CONTACT "Sensics VRPN Contact <vrpn@sensics.com>")
+set(CPACK_PACKAGE_CONTACT "VRPN Community <vrpn@listserv.unc.edu>")
 
 #-----------------------------------------------------------------------------
 # Compiler flags we got from Hans for Windows and from Sheldon Andrews
@@ -210,9 +214,10 @@ list(APPEND EXTRA_LIBS quat)
 
 ###
 # Threading (not on win32)
+# Remove the test for Android when threads are fixed in the Android CMake.
 ###
-if(NOT WIN32)
-	find_package(Threads REQUIRED ${QUIET_IF_SUBPROJECT})
+if(NOT WIN32 AND NOT BUILD_WITH_ANDROID_NDK)
+	find_package(Threads REQUIRED)
 	list(APPEND EXTRA_LIBS ${CMAKE_THREAD_LIBS_INIT})
 endif()
 
@@ -230,10 +235,8 @@ endif()
 ###
 # Optional packages
 ###
-if(NOT SUBPROJECT)
-	message(STATUS
-		"Now searching for auto-configurable optional packages...\n")
-endif()
+message(STATUS
+	"Now searching for auto-configurable optional packages...\n")
 
 ###
 # Submodules - bundled libraries/sources
@@ -243,7 +246,7 @@ add_subdirectory(submodules)
 ###
 # SWIG and Python Libs (for python wrappers)
 ###
-find_package(SWIG ${QUIET_IF_SUBPROJECT})
+find_package(SWIG)
 
 set(CurrentPythonSettings
 	"${VRPN_BUILD_PYTHON}${VRPN_BUILD_PYTHON_HANDCODED_2X}${VRPN_BUILD_PYTHON_HANDCODED_3X}")
@@ -253,7 +256,6 @@ if(NOT CurrentPythonSettings STREQUAL _VRPN_PYTHON_SETTINGS)
 	if(VRPN_BUILD_PYTHON)
 		# Swig wants 2.x, I assume
 		set(vrpn_python_versionsearch 2)
-		set(Python_ADDITIONAL_VERSIONS "")
 		if(VRPN_BUILD_PYTHON_HANDCODED_3X)
 			message(FATAL_ERROR
 				"Can't build both SWIG (2.x) and hand-coded 3.x Python bindings. Disable either VRPN_BUILD_PYTHON or VRPN_BUILD_PYTHON_HANDCODED_3X.")
@@ -268,13 +270,11 @@ if(NOT CurrentPythonSettings STREQUAL _VRPN_PYTHON_SETTINGS)
 		NOT
 		VRPN_BUILD_PYTHON_HANDCODED_3X)
 		set(vrpn_python_versionsearch 2)
-		set(Python_ADDITIONAL_VERSIONS "")
 	elseif(VRPN_BUILD_PYTHON_HANDCODED_3X
 		AND
 		NOT
 		VRPN_BUILD_PYTHON_HANDCODED_2X)
 		set(vrpn_python_versionsearch 3)
-		set(Python_ADDITIONAL_VERSIONS 3.4)
 	endif()
 	unset(PYTHON_INCLUDE_DIR CACHE)
 	unset(PYTHON_INCLUDE_DIR)
@@ -297,7 +297,7 @@ endif()
 
 # Passing just the major version works with as desired multi-python-capable find module such
 # as in latest CMake (2.8.9)
-find_package(PythonLibs ${_VRPN_PYTHON_VERSIONSEARCH} ${QUIET_IF_SUBPROJECT})
+find_package(PythonLibs ${_VRPN_PYTHON_VERSIONSEARCH})
 if(PYTHONLIBS_FOUND)
 	if(PYTHONLIBS_VERSION_STRING)
 		string(SUBSTRING
@@ -353,15 +353,17 @@ option_requires(VRPN_BUILD_PYTHON_HANDCODED_3X
 ###
 # javac, jar, and javah (for java wrapper)
 ###
-if(ANDROID)
-	find_host_package(Java COMPONENTS Development)
-	find_host_package(JNI)
-	find_host_program(JAVAH_EXECUTABLE NAMES javah)
+if(BUILD_WITH_ANDROID_NDK)
+	set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+	set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY NEVER)
+	set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE NEVER)
+	find_package(Java COMPONENTS Development REQUIRED)
+	find_package(JNI REQUIRED)
 else()
-	find_package(Java COMPONENTS Development ${QUIET_IF_SUBPROJECT})
-	find_package(JNI ${QUIET_IF_SUBPROJECT})
-	find_program(JAVAH_EXECUTABLE NAMES javah)
+	find_package(Java COMPONENTS Development)
+	find_package(JNI)
 endif()
+find_program(JAVAH_EXECUTABLE NAMES javah)
 mark_as_advanced(JAVAH_EXECUTABLE)
 option_requires(VRPN_BUILD_JAVA
 	"Build VRPN Java bindings"
@@ -371,10 +373,16 @@ option_requires(VRPN_BUILD_JAVA
 	JNI_FOUND
 	JAVAH_EXECUTABLE)
 
+if(BUILD_WITH_ANDROID_NDK)
+	set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM ONLY)
+	set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+	set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+endif()
+
 ###
 # MPI
 ###
-find_package(MPI ${QUIET_IF_SUBPROJECT})
+find_package(MPI)
 # XXX Safe to enable by default if we find it?
 option_requires(VRPN_USE_MPI
 	"Build with MPI support"
@@ -391,7 +399,7 @@ endif()
 ###
 # Modbus library
 ###
-find_package(Modbus ${QUIET_IF_SUBPROJECT})
+find_package(Modbus)
 option_requires(VRPN_USE_MODBUS
 	"Build with Modbus support"
 	OFF_BY_DEFAULT
@@ -406,7 +414,7 @@ endif()
 ###
 # Libusb1
 ###
-find_package(Libusb1 ${QUIET_IF_SUBPROJECT})
+find_package(Libusb1)
 option_requires(VRPN_USE_LIBUSB_1_0
 	"Attempt to use LibUSB-1.0 to talk directly to USB devices."
 	${DEFAULT_OFF_IF_SUBPROJECT}
@@ -424,7 +432,7 @@ endif()
 
 # Setting up the local HIDAPI was handled above, in the submodules directory
 if(NOT VRPN_USE_LOCAL_HIDAPI)
-	find_package(HIDAPI ${QUIET_IF_SUBPROJECT})
+	find_package(HIDAPI)
 endif()
 
 # HID requires either local or system-installed HIDAPI
@@ -459,7 +467,7 @@ endif()
 ###
 # Sensable "OpenHaptics" HDAPI/HLAPI
 ###
-find_package(OpenHaptics ${QUIET_IF_SUBPROJECT})
+find_package(OpenHaptics)
 option_requires(VRPN_USE_HDAPI
 	"Allow SensAble Phantom support through HDAPI/HLAPI - VRPN_USE_PHANTOM_SERVER must still be set"
 	${DEFAULT_OFF_IF_SUBPROJECT}
@@ -472,7 +480,7 @@ endif()
 # Sensable GHOST
 ###
 if(NOT VRPN_USE_HDAPI)
-	find_package(GHOST ${QUIET_IF_SUBPROJECT})
+	find_package(GHOST)
 	option_requires(VRPN_USE_GHOST
 		"Allow SensAble Phantom support through GHOST - VRPN_USE_PHANTOM_SERVER must still be set"
 		${DEFAULT_OFF_IF_SUBPROJECT}
@@ -507,22 +515,9 @@ endif()
 
 
 ###
-# libi2c-dev
-###
-find_package(libi2c-dev ${QUIET_IF_SUBPROJECT})
-option_requires(VRPN_USE_I2CDEV
-	"Build devices requiring libi2c-dev"
-	${DEFAULT_OFF_IF_SUBPROJECT}
-	I2CDEV_FOUND)
-
-if(VRPN_USE_I2CDEV)
-	include_directories(AFTER ${I2CDEV_INCLUDE_DIRS})
-endif()
-
-###
 # WiiUse
 ###
-find_package(WiiUse ${QUIET_IF_SUBPROJECT})
+find_package(WiiUse)
 option_requires(VRPN_USE_WIIUSE
 	"Build with WiiUse library support (makes servers GPL)"
 	${DEFAULT_OFF_IF_SUBPROJECT}
@@ -538,7 +533,7 @@ endif()
 ##
 ## Setting up the local JSONCPP was handled above, in the submodules directory
 if(NOT VRPN_USE_LOCAL_JSONCPP)
-	find_package(JsonCpp ${QUIET_IF_SUBPROJECT})
+	find_package(JsonCpp)
 endif()
 option_requires(VRPN_USE_JSONNET
 	"Build with JSONCPP (for Android widgets and other UDP JSON-based APIs)"
@@ -546,7 +541,7 @@ option_requires(VRPN_USE_JSONNET
 	JSONCPP_FOUND)
 
 if(VRPN_USE_JSONNET)
-	include_directories(BEFORE ${JSONCPP_INCLUDE_DIRS})
+	include_directories(${JSONCPP_INCLUDE_DIRS})
 	list(APPEND SERVER_EXTRA_LIBS ${JSONCPP_LIBRARIES})
 else()
 	set(JSONCPP_SOURCES)
@@ -555,7 +550,7 @@ endif()
 ###
 # libnifalcon
 ###
-find_package(LibNifalcon ${QUIET_IF_SUBPROJECT})
+find_package(LibNifalcon)
 option_requires(VRPN_USE_LIBNIFALCON
 	"Build with libnifalcon support to access Novint Falcon devices"
 	${DEFAULT_OFF_IF_SUBPROJECT}
@@ -570,7 +565,7 @@ endif()
 # DirectInput and XInput
 ###
 if(WIN32)
-	find_package(DirectX ${QUIET_IF_SUBPROJECT})
+	find_package(DirectX)
 	option_requires(VRPN_USE_DIRECTINPUT
 		"Build with Microsoft DirectInput support"
 		${DEFAULT_OFF_IF_SUBPROJECT}
@@ -641,7 +636,7 @@ if(MSVC)
 	else()
 		set(DIRECTSHOW_OFF_BY_DEFAULT)
 	endif()
-	find_package(DirectShow ${QUIET_IF_SUBPROJECT})
+	find_package(DirectShow)
 	option_requires(VRPN_USE_DIRECTSHOW
 		"Build with Microsoft DirectShow support"
 		${DIRECTSHOW_OFF_BY_DEFAULT}
@@ -657,7 +652,7 @@ endif()
 # GPM
 ###
 if(UNIX)
-	find_package(GPM ${QUIET_IF_SUBPROJECT})
+	find_package(GPM)
 	option_requires(VRPN_USE_GPM_MOUSE
 		"Build with GPM Linux mouse interface support (makes servers GPL)"
 		${DEFAULT_OFF_IF_SUBPROJECT}
@@ -671,7 +666,7 @@ endif()
 ###
 # INTERSENSE
 ###
-find_package(InterSense ${QUIET_IF_SUBPROJECT})
+find_package(InterSense)
 option_requires(VRPN_INCLUDE_INTERSENSE
 	"Build with InterSense support"
 	${DEFAULT_OFF_IF_SUBPROJECT}
@@ -683,25 +678,9 @@ if(VRPN_INCLUDE_INTERSENSE)
 endif()
 
 ###
-# THALMICLABSMYO
-###
-if(WIN32)
-	find_package(ThalmicLabsMyo ${QUIET_IF_SUBPROJECT})
-	option_requires(VRPN_INCLUDE_THALMICLABSMYO
-		"Build with Thalmic Labs' Myo support"
-		${DEFAULT_OFF_IF_SUBPROJECT}
-		THALMICLABSMYO_FOUND)
-	if(VRPN_INCLUDE_THALMICLABSMYO)
-		include_directories(${THALMICLABSMYO_INCLUDE_DIRS})
-		list(APPEND SERVER_EXTRA_LIBS ${THALMICLABSMYO_LIBRARIES})
-		add_definitions(-DVRPN_INCLUDE_THALMICLABSMYO)
-	endif()
-endif()
-
-###
 # NIDAQMX
 ###
-find_package(NIDAQmx ${QUIET_IF_SUBPROJECT})
+find_package(NIDAQmx)
 option_requires(VRPN_USE_NATIONAL_INSTRUMENTS_MX
 	"Build with National Instruments NIDAQMX support"
 	${DEFAULT_OFF_IF_SUBPROJECT}
@@ -715,7 +694,7 @@ endif()
 ###
 # Arrington Research ViewPoint EyeTracker
 ###
-find_package(ViewPoint ${QUIET_IF_SUBPROJECT})
+find_package(ViewPoint)
 option_requires(VRPN_USE_VIEWPOINT
 	"Build with support for ViewPoint EyeTracker"
 	${DEFAULT_OFF_IF_SUBPROJECT}
@@ -738,7 +717,7 @@ endif()
 # Adrienne timecode boards
 ###
 if(WIN32 OR CYGWIN)
-	find_package(Adrienne ${QUIET_IF_SUBPROJECT})
+	find_package(Adrienne)
 	option_requires(VRPN_INCLUDE_TIMECODE_SERVER
 		"Build with support for Adrienne timecode server"
 		${DEFAULT_OFF_IF_SUBPROJECT}
@@ -787,8 +766,8 @@ if(NOT WIN32)
 	# MiKTeX 2.9's perl is broken - missing libgcc-s-sjlj-1.dll -
 	# and can't seem to work around it without popping up dialogs
 	# which is no fun for automated builds.
-	find_package(Perl ${QUIET_IF_SUBPROJECT})
-	find_package(PerlModules ${QUIET_IF_SUBPROJECT} COMPONENTS Parse::RecDescent)
+	find_package(Perl)
+	find_package(PerlModules COMPONENTS Parse::RecDescent)
 endif()
 
 option_requires(VRPN_BUILD_TEST_RPC_GENERATION
@@ -807,13 +786,10 @@ option(VRPN_USE_PDI
 	"Build with flags to enable the use of Polhemus DVI library."
 	OFF)
 if(VRPN_USE_PDI)
-	find_path(POLHEMUS_PDI_DIR NAMES "Inc" "Lib" PATH_SUFFIXES "PDI_110" "PDI_90" PATHS "C:/Program Files (x86)/Polhemus/PDI" NO_DEFAULT_PATH)
-	include_directories(${POLHEMUS_PDI_DIR}/Inc)
-	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-		list(APPEND SERVER_EXTRA_LIBS "${POLHEMUS_PDI_DIR}/Lib/x64/PDI.lib")
-	else()
-		list(APPEND SERVER_EXTRA_LIBS "${POLHEMUS_PDI_DIR}/Lib/Win32/PDI.lib")
-	endif()
+	include_directories("C:/Program Files (x86)/Polhemus/PDI/PDI_90/Inc")
+	list(APPEND
+		SERVER_EXTRA_LIBS
+		"C:/Program Files (x86)/Polhemus/PDI/PDI_90/Lib/Win32/PDI.lib")
 endif()
 
 ###
@@ -839,7 +815,7 @@ endif()
 ###
 # Hillcrest Labs' Freespace
 ###
-find_package(LibFreespace ${QUIET_IF_SUBPROJECT})
+find_package(LibFreespace)
 option_requires(VRPN_USE_FREESPACE
 	"Build with Hillcrest Labs' Freespace devices support"
 	${DEFAULT_OFF_IF_SUBPROJECT}
@@ -858,19 +834,6 @@ option(VRPN_USE_MOTIONNODE
 	OFF)
 if(VRPN_USE_MOTIONNODE)
 	list(APPEND SERVER_EXTRA_LIBS ${CMAKE_DL_LIBS})
-endif()
-
-###
-# Trivisio ColibriAPI
-###
-find_package(ColibriApi ${QUIET_IF_SUBPROJECT})
-option_requires(VRPN_USE_COLIBRIAPI
-	"Build with Trivisio ColibriAPI support"
-	OFF_BY_DEFAULT
-	COLIBRIAPI_FOUND)
-if(VRPN_USE_COLIBRIAPI)
-	include_directories(${COLIBRIAPI_INCLUDE_DIR})
-	list(APPEND SERVER_EXTRA_LIBS ${COLIBRIAPI_LIBRARIES})
 endif()
 
 ###
@@ -900,7 +863,7 @@ option(VRPN_USE_MICROSCRIBE
 	"Build with MicroScribe3D library support"
 	OFF)
 option(VRPN_USE_TRIVISIOCOLIBRI
-	"(OBSOLETE) Build with support for TrivisioColibri tracker"
+	"Build with support for TrivisioColibri tracker"
 	OFF)
 if(WIN32)
 	option(VRPN_USE_WINSOCK2
@@ -921,24 +884,6 @@ if(UNIX)
 	endif()
 
 endif()
-
-if(WIN32 AND NOT CYGWIN)
-	# Only intended for Windows, known not needed on Cygwin,
-	# but potentially hazardous on other Windows build environments.
-	option(VRPN_EXPORT_GETTIMEOFDAY "Use a #define to make gettimeofday a synonym for vrpn_gettimeofday." OFF)
-else()
-	set(VRPN_EXPORT_GETTIMEOFDAY OFF)
-endif()
-
-# This will only work on compilers that support C++-11.
-# We could check for this and turn it on by default.
-set(VRPN_CHRONO_DEFAULT OFF)
-if(MSVC AND MSVC_VERSION GREATER 1800)
-	# On MSVC 2015 and newer, std::chrono provides the best time implementation.
-	set(VRPN_CHRONO_DEFAULT ON)
-endif()
-
-option(VRPN_USE_STD_CHRONO "Use the std::chrono class for time" ${VRPN_CHRONO_DEFAULT})
 
 option(VRPN_USE_STATIC_ASSERTIONS "Use some compile-time assertions" ON)
 option(VRPN_BUILD_EXTRA_COMPILER_WARNINGS
@@ -968,7 +913,10 @@ endif()
 # to the source code
 configure_file("${PROJECT_SOURCE_DIR}/vrpn_Configure.h.cmake_in"
 	"${PROJECT_BINARY_DIR}/vrpn_Configure.h")
-set(VRPN_PATH_TO_CMAKE_CONFIG "${PROJECT_BINARY_DIR}/vrpn_Configure.h")
+file(RELATIVE_PATH
+	VRPN_PATH_TO_CMAKE_CONFIG
+	"${CMAKE_CURRENT_SOURCE_DIR}"
+	"${PROJECT_BINARY_DIR}/vrpn_Configure.h")
 add_definitions("-DVRPN_USING_CMAKE=\"${VRPN_PATH_TO_CMAKE_CONFIG}\"")
 
 if(SUBPROJECT)
@@ -976,10 +924,30 @@ if(SUBPROJECT)
 endif()
 
 if(APPLE)
-	# XXX Is this still needed?
+	if(NOT CMAKE_OSX_ARCHITECTURES OR CMAKE_OSX_ARCHITECTURES STREQUAL "")
+		if(_CMAKE_OSX_MACHINE MATCHES "ppc")
+			set(CMAKE_OSX_ARCHITECTURES
+				"ppc;ppc64"
+				CACHE
+				STRING
+				"Build architectures for OS X"
+				FORCE)
+		else()
+			set(CMAKE_OSX_ARCHITECTURES
+				"i386;x86_64"
+				CACHE
+				STRING
+				"Build architectures for OS X"
+				FORCE)
+		endif()
+	endif()
+	set(CMAKE_INCLUDE_SYSTEM_FLAG_C "-isystem ")
+	set(CMAKE_INCLUDE_SYSTEM_FLAG_CXX "-isystem ")
 	if(NOT CMAKE_INSTALL_NAME_DIR)
 		set(CMAKE_INSTALL_NAME_DIR "${CMAKE_INSTALL_PREFIX}/lib")
 	endif()
+	message(STATUS
+		"Building ${CMAKE_PROJECT_NAME} for ${CMAKE_OSX_ARCHITECTURES}")
 endif()
 
 #-----------------------------------------------------------------------------
@@ -988,13 +956,11 @@ endif()
 set(VRPN_CLIENT_SOURCES
 	vrpn_Analog.C
 	vrpn_Analog_Output.C
-	vrpn_Assert.C
 	vrpn_Auxiliary_Logger.C
 	vrpn_BaseClass.C
 	vrpn_Button.C
 	vrpn_Connection.C
 	vrpn_Dial.C
-	vrpn_EndpointContainer.C
 	vrpn_FileConnection.C
 	vrpn_FileController.C
 	vrpn_ForceDevice.C
@@ -1012,21 +978,18 @@ set(VRPN_CLIENT_SOURCES
 	vrpn_SharedObject.C
 	vrpn_Sound.C
 	vrpn_Text.C
-	vrpn_Thread.C
 	vrpn_Tracker.C)
 
 set(VRPN_CLIENT_PUBLIC_HEADERS
 	"${PROJECT_BINARY_DIR}/vrpn_Configure.h"
 	vrpn_Analog.h
 	vrpn_Analog_Output.h
-	vrpn_Assert.h
 	vrpn_Auxiliary_Logger.h
 	vrpn_BaseClass.h
 	vrpn_Button.h
 	vrpn_Connection.h
 	vrpn_ConnectionPtr.h
 	vrpn_Dial.h
-	vrpn_EndpointContainer.h
 	vrpn_FileConnection.h
 	vrpn_FileController.h
 	vrpn_ForceDevice.h
@@ -1039,7 +1002,6 @@ set(VRPN_CLIENT_PUBLIC_HEADERS
 	vrpn_MainloopContainer.h
 	vrpn_MainloopObject.h
 	vrpn_Mutex.h
-	vrpn_OwningPtr.h
 	vrpn_RedundantTransmission.h
 	vrpn_SendTextMessageStreamProxy.h
 	vrpn_Serial.h
@@ -1048,10 +1010,8 @@ set(VRPN_CLIENT_PUBLIC_HEADERS
 	vrpn_SharedObject.h
 	vrpn_Sound.h
 	vrpn_Text.h
-	vrpn_Thread.h
 	vrpn_Tracker.h
-	vrpn_Types.h
-	vrpn_WindowsH.h)
+	vrpn_Types.h)
 
 set(VRPN_SERVER_SOURCES
 	${VRPN_CLIENT_SOURCES}
@@ -1059,7 +1019,6 @@ set(VRPN_SERVER_SOURCES
 	vrpn_3DMicroscribe.C
 	vrpn_3Space.C
 	vrpn_5DT16.C
-	vrpn_Adafruit.C
 	vrpn_ADBox.C
 	vrpn_Analog_5dt.C
 	vrpn_Analog_5dtUSB.C
@@ -1097,7 +1056,6 @@ set(VRPN_SERVER_SOURCES
 	vrpn_Joylin.C
 	vrpn_Joywin32.C
 	vrpn_Keyboard.C
-	vrpn_Laputa.C
 	vrpn_LUDL.C
 	vrpn_Logitech_Controller_Raw.C
 	vrpn_Magellan.C
@@ -1106,9 +1064,6 @@ set(VRPN_SERVER_SOURCES
 	vrpn_NationalInstruments.C
 	vrpn_Nidaq.C
 	vrpn_nikon_controls.C
-	vrpn_nVidia_shield_controller.C
-	vrpn_Oculus.C
-	vrpn_OzzMaker.C
 	vrpn_OmegaTemperature.C
 	vrpn_Poser_Analog.C
 	vrpn_Poser_Tek4662.C
@@ -1117,7 +1072,6 @@ set(VRPN_SERVER_SOURCES
 	vrpn_Saitek_Controller_Raw.C
 	vrpn_sgibox.C
 	vrpn_Spaceball.C
-	vrpn_Streaming_Arduino.C
 	vrpn_Tng3.C
 	vrpn_Tracker_3DMouse.C
 	vrpn_Tracker_AnalogFly.C
@@ -1128,7 +1082,6 @@ set(VRPN_SERVER_SOURCES
 	vrpn_Tracker_Filter.C
 	vrpn_Tracker_GameTrak.C
 	vrpn_Tracker_GPS.C
-	vrpn_Tracker_IMU.C
 	vrpn_Tracker_isense.C
 	vrpn_Tracker_Isotrak.C
 	vrpn_Tracker_JsonNet.C
@@ -1140,10 +1093,8 @@ set(VRPN_SERVER_SOURCES
 	vrpn_Tracker_PDI.C
 	vrpn_Tracker_PhaseSpace.C
 	vrpn_Tracker_RazerHydra.C
-	vrpn_Tracker_ThalmicLabsMyo.C
 	vrpn_Tracker_SpacePoint.C
 	vrpn_Tracker_Wintracker.C
-	vrpn_Tracker_Colibri.C
 	vrpn_Tracker_TrivisioColibri.C
 	vrpn_Tracker_WiimoteHead.C
 	vrpn_Tracker_zSight.C
@@ -1168,7 +1119,6 @@ set(VRPN_SERVER_PUBLIC_HEADERS
 	vrpn_3DMicroscribe.h
 	vrpn_3Space.h
 	vrpn_5DT16.h
-	vrpn_Adafruit.h
 	vrpn_ADBox.h
 	vrpn_Analog_5dt.h
 	vrpn_Analog_5dtUSB.h
@@ -1208,7 +1158,6 @@ set(VRPN_SERVER_PUBLIC_HEADERS
 	vrpn_Joywin32.h
 	vrpn_Keyboard.h
 	vrpn_Logitech_Controller_Raw.h
-	vrpn_Laputa.h
 	vrpn_LUDL.h
 	vrpn_Magellan.h
 	vrpn_MessageMacros.h
@@ -1217,11 +1166,8 @@ set(VRPN_SERVER_PUBLIC_HEADERS
 	vrpn_NationalInstruments.h
 	vrpn_Nidaq.h
 	vrpn_nikon_controls.h
-	vrpn_nVidia_shield_controller.h
-	vrpn_Oculus.h
 	vrpn_OmegaTemperature.h
 	vrpn_OneEuroFilter.h
-	vrpn_OzzMaker.h
 	vrpn_Poser_Analog.h
 	vrpn_Poser.h
 	vrpn_Poser_Tek4662.h
@@ -1230,7 +1176,6 @@ set(VRPN_SERVER_PUBLIC_HEADERS
 	vrpn_Saitek_Controller_Raw.h
 	vrpn_sgibox.h
 	vrpn_Spaceball.h
-	vrpn_Streaming_Arduino.h
 	vrpn_Tng3.h
 	vrpn_Tracker_3DMouse.h
 	vrpn_Tracker_AnalogFly.h
@@ -1241,7 +1186,6 @@ set(VRPN_SERVER_PUBLIC_HEADERS
 	vrpn_Tracker_Filter.h
 	vrpn_Tracker_GameTrak.h
 	vrpn_Tracker_GPS.h
-	vrpn_Tracker_IMU.h
 	vrpn_Tracker_isense.h
 	vrpn_Tracker_Isotrak.h
 	vrpn_Tracker_JsonNet.h
@@ -1253,10 +1197,8 @@ set(VRPN_SERVER_PUBLIC_HEADERS
 	vrpn_Tracker_PDI.h
 	vrpn_Tracker_PhaseSpace.h
 	vrpn_Tracker_RazerHydra.h
-	vrpn_Tracker_ThalmicLabsMyo.h
 	vrpn_Tracker_SpacePoint.h
 	vrpn_Tracker_Wintracker.h
-	vrpn_Tracker_Colibri.h
 	vrpn_Tracker_TrivisioColibri.h
 	vrpn_Tracker_WiimoteHead.h
 	vrpn_Tracker_zSight.h
@@ -1290,11 +1232,6 @@ if(VRPN_BUILD_SERVER_LIBRARY)
 	set_property(TARGET
 		vrpnserver
 		PROPERTY
-		SOVERSION
-		0)
-	set_property(TARGET
-		vrpnserver
-		PROPERTY
 		PROJECT_LABEL
 		"Core VRPN Server Library")
 	set_property(TARGET
@@ -1302,7 +1239,6 @@ if(VRPN_BUILD_SERVER_LIBRARY)
 		PROPERTY
 		FOLDER
 		"Library")
-	string(REPLACE ";" " " SERVER_LINK_FLAGS "${SERVER_LINK_FLAGS}")
 	set_property(TARGET
 		vrpnserver
 		PROPERTY
@@ -1319,10 +1255,16 @@ if(VRPN_BUILD_SERVER_LIBRARY)
 	if(VRPN_INSTALL)
 		install(TARGETS
 			vrpnserver
-			RUNTIME DESTINATION bin COMPONENT serversdk
-			LIBRARY DESTINATION lib${LIB_SUFFIX} COMPONENT serversdk
-			ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT serversdk
-			PUBLIC_HEADER DESTINATION include COMPONENT serversdk)
+			ARCHIVE
+			DESTINATION
+			lib
+			COMPONENT
+			serversdk
+			PUBLIC_HEADER
+			DESTINATION
+			include
+			COMPONENT
+			serversdk)
 	endif()
 	add_cppcheck(vrpnserver STYLE UNUSED_FUNCTIONS)
 endif()
@@ -1338,11 +1280,6 @@ if(VRPN_BUILD_CLIENT_LIBRARY)
 		PROPERTY
 		PUBLIC_HEADER
 		${VRPN_CLIENT_PUBLIC_HEADERS})
-	set_property(TARGET
-		vrpn
-		PROPERTY
-		SOVERSION
-		0)
 
 	if(NOT VRPN_CLIENT_ONLY)
 		set_property(TARGET
@@ -1365,10 +1302,16 @@ if(VRPN_BUILD_CLIENT_LIBRARY)
 	if(VRPN_INSTALL)
 		install(TARGETS
 			vrpn
-			RUNTIME DESTINATION bin COMPONENT clientsdk
-			LIBRARY DESTINATION lib${LIB_SUFFIX} COMPONENT clientsdk
-			ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT clientsdk
-			PUBLIC_HEADER DESTINATION include COMPONENT clientsdk)
+			ARCHIVE
+			DESTINATION
+			lib
+			COMPONENT
+			clientsdk
+			PUBLIC_HEADER
+			DESTINATION
+			include
+			COMPONENT
+			clientsdk)
 	endif()
 	add_cppcheck(vrpn STYLE UNUSED_FUNCTIONS)
 endif()
@@ -1432,7 +1375,7 @@ endif()
 
 #-----------------------------------------------------------------------------
 # Testing applications that live in the main directory.
-if(BUILD_TESTING)
+if(VRPN_BUILD_SERVERS AND VRPN_BUILD_SERVER_LIBRARY AND BUILD_TESTING AND WIN32)
 	foreach(SOURCE time_test.cpp)
 		get_filename_component(APP ${SOURCE} NAME_WE)
 		add_executable(${APP} ${SOURCE})
@@ -1531,9 +1474,7 @@ endif()
 
 #-----------------------------------------------------------------------------
 # Enable testing/dashboards
-if(NOT SUBPROJECT)
-	create_dashboard_scripts("${CMAKE_CURRENT_SOURCE_DIR}/DashboardBuildInitialCache.cmake.in")
-endif()
+create_dashboard_scripts("${CMAKE_CURRENT_SOURCE_DIR}/DashboardBuildInitialCache.cmake.in")
 
 #-----------------------------------------------------------------------------
 # If we succeeded, we can go on and include packaging!

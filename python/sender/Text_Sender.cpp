@@ -40,7 +40,7 @@ namespace vrpn_python {
       static std::string defaultCall("invalid call : send_message(message, severity = normal, level = 0, datetime = NOW");
 
       char *msg = NULL;
-      const char *severity = "normal";
+      char *severity = (char *)"normal";
       int level = 0;
       PyObject *py_time = NULL;
 
